@@ -1,3 +1,5 @@
+# Questions ouvertes :
+
 Les sites doivent t'il intégrer le soc de l'entreprise principale ou l'on reste détaché également ? 
 
 Le projet couvre-t-il l’OT ou uniquement l’IT industriel ? 
