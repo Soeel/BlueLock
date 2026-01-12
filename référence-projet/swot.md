@@ -1,4 +1,4 @@
-# Analyse SWOT – Équipe projet
+# Analyse SWOT
 
 
 ## 1. Objectif de l’analyse
