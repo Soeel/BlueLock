@@ -16,8 +16,8 @@ PRÉREQUIS : Domaine déjà créé (Install-ADDSForest terminé).
 
 [CmdletBinding()]
 param(
-  [string]$CompanyName = "LAB",
-  [string]$RootOUName  = "LAB",
+  [string]$CompanyName = "Blue",
+  [string]$RootOUName  = "Blue",
   [string]$ShareRoot   = "C:\Shares",
   [int]$UsersPerDept   = 10,
   [switch]$WhatIfOnly
