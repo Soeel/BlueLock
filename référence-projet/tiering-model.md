@@ -1,4 +1,3 @@
-Bien sûr 👌 voici une version **courte et propre** :
 
 ---
 
