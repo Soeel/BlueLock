@@ -27,7 +27,7 @@ locals {
       template = "template-wserv2016"
       memory   = 4096
       cores    = 2
-      disk     = "40G" # Correspond aux 40 Go demandés 
+      disk     = "40G" # Correspond aux 40 Go demandés [cite: 23]
     },
     "SRV-SCADABR" = {
       template = "template-rocky8"
@@ -47,18 +47,22 @@ locals {
 resource "proxmox_vm_qemu" "infrastructure" {
   for_each    = local.vms
   name        = each.key
-  target_node = "pve" # Remplacez par le nom de votre nœud (souvent 'pve')
+  target_node = "pve" 
+  
+  # Ajout du Resource Pool pour l'organisation de l'équipe
+  pool        = "Basile-Hugo-Esteban-Maxime"
+  
   clone       = each.value.template
-  full_clone  = true # Important pour l'industrialisation [cite: 38]
+  full_clone  = true # Important pour l'industrialisation [cite: 34, 38]
 
   cores   = each.value.cores
   memory  = each.value.memory
-  agent   = 1 # Requis pour récupérer l'IP et l'état de la VM
+  agent   = 1 # Requis pour récupérer l'IP et l'état de la VM [cite: 34]
 
   disk {
     size    = each.value.disk
     type    = "scsi"
-    storage = "local-lvm" # Modifiez selon votre stockage Proxmox
+    storage = "local-lvm" 
   }
 
   network {
@@ -66,6 +70,5 @@ resource "proxmox_vm_qemu" "infrastructure" {
     bridge = "vmbr0"
   }
 
-  # Optionnel : définit l'ordre de démarrage
   boot = "order=scsi0"
 }
