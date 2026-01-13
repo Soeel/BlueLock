@@ -16,13 +16,13 @@ Contrôleur de domaine :
 
 ### 3.1 Windows
 
-1) DC01  
+1) SRV-DC01  
 - OS : Windows Server 2016 
 - Rôle : Active Directory + DNS + DHCP
   40 Go de stockage
   
 
-2) SRV-FILES01  &&  APP01
+2) SRV-FILESAPP
 - OS : Windows Server 2016  
 - Rôle : Serveur de fichiers (SMB) & Application indus MES + ERP/GMAO – simulation
   40 Go de stockage
@@ -30,17 +30,13 @@ Contrôleur de domaine :
 ### 3.2 Linux
 
 
-5) LNX-SCADA01  
-- OS : Rocky Linux 9  
+5) SRV-SCADABR  
+- OS : Rocky Linux 8
 - Rôle : SCADA / Supervision  
 
-6) LNX-HIST01  
-- OS : RHEL 8.x ou Rocky 8  
-- Rôle : Historian (stockage des données process)
-
-7) LNX-WEB01  
+6) SRV-WEB 
 - OS : Debian 12  
-- Rôle : Portail web interne
+- Rôle : Portail wiki
 
 ## 4) Env AD
 Trouvé un script pas trop exigeant pour déploiment de utilisateurs, groupes ...
@@ -99,3 +95,4 @@ Serveur : SRV-FILES01
 - Enregistrement des données dans l’Historian
 
 - Accès web au portail interne
+
