@@ -30,11 +30,11 @@ Contrôleur de domaine :
 ### 3.2 Linux
 
 
-5) SRV-SCADABR  
+3) SRV-SCADABR  
 - OS : Rocky Linux 8
 - Rôle : SCADA / Supervision  
 
-6) SRV-WEB 
+4) SRV-WEB 
 - OS : Debian 12  
 - Rôle : Portail wiki
 
@@ -95,4 +95,5 @@ Serveur : SRV-FILES01
 - Enregistrement des données dans l’Historian
 
 - Accès web au portail interne
+
 
