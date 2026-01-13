@@ -17,16 +17,15 @@ Contrôleur de domaine :
 ### 3.1 Windows
 
 1) DC01  
-- OS : Windows Server 2012 R2  
-- Rôle : Active Directory + DNS  
+- OS : Windows Server 2016 
+- Rôle : Active Directory + DNS + DHCP
+  40 Go de stockage
+  
 
-2) SRV-FILES01  
+2) SRV-FILES01  &&  APP01
 - OS : Windows Server 2016  
-- Rôle : Serveur de fichiers (SMB)  
-
-3) SRV-APP01  
-- OS : Windows Server 2012 R2  
-- Rôle : Serveur applicatif (MES + ERP/GMAO – simulation)
+- Rôle : Serveur de fichiers (SMB) & Application indus MES + ERP/GMAO – simulation
+  40 Go de stockage
 
 ### 3.2 Linux
 
@@ -66,12 +65,10 @@ Serveur : SRV-FILES01
 - Création du domaine usine.local
 - Création des comptes et groupes
 
-### SRV-FILES01
+### SRV-FILES01 && APP01
 - Rôle File Server
 - Partages SMB
-
-### SRV-APP01
-- Joindre le domaine
+ - Joindre le domaine
 - Installer prérequis applicatifs :
   - IIS / .NET (si besoin)
   - SQL Server Express (optionnel)
@@ -100,4 +97,5 @@ Serveur : SRV-FILES01
 - Accès aux partages SMB
 - Lecture des valeurs PLC depuis SCADA
 - Enregistrement des données dans l’Historian
+
 - Accès web au portail interne
