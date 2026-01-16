@@ -1,0 +1,69 @@
+---
+- name: Install ScadaBR on SRV-SCADABR (Rocky Linux 8)
+  hosts: scadabr
+  become: true
+  gather_facts: false   # évite le crash setup si Ansible incompatible
+
+  vars:
+    scadabr_dir: /opt/ScadaBR_Installer
+    git_repo: "https://github.com/thiagoralves/ScadaBR_Installer.git"
+    script_install: "./install_scadabr.sh"
+    marker_file: "/opt/ScadaBR_Installer/installation_complete_marker.txt"
+
+  tasks:
+    # 1) Hostname (sans facts)
+    - name: Set hostname to SRV-SCADABR
+      ansible.builtin.command: hostnamectl set-hostname SRV-SCADABR
+      changed_when: true
+
+    # 2) Bootstrap packages via raw (git + tar + libnsl)
+    - name: Ensure required packages are installed (git, tar, libnsl)
+      ansible.builtin.raw: |
+        set -e
+        if ! command -v dnf >/dev/null 2>&1; then
+          echo "dnf not found" >&2
+          exit 1
+        fi
+
+        # git
+        if ! command -v git >/dev/null 2>&1; then
+          dnf -y install git
+        fi
+
+        # tar
+        if ! command -v tar >/dev/null 2>&1; then
+          dnf -y install tar
+        fi
+
+        # libnsl (needed for old Java like 1.6 on Rocky 8)
+        if ! rpm -q libnsl >/dev/null 2>&1; then
+          dnf -y install libnsl
+        fi
+
+        ldconfig
+      changed_when: false
+
+    # 3) Clone/update repo
+    - name: Clone ScadaBR installer repo
+      ansible.builtin.command: >
+        git clone {{ git_repo }} {{ scadabr_dir }}
+      args:
+        creates: "{{ scadabr_dir }}/.git"
+
+    - name: Update repo if already cloned
+      ansible.builtin.command: git pull
+      args:
+        chdir: "{{ scadabr_dir }}"
+      register: git_pull
+      changed_when: "'Already up to date.' not in git_pull.stdout"
+
+    # 4) Run install script (auto-answer 'a' + Enter) + marker idempotence
+    - name: Run ScadaBR installation script (auto 'a' + Enter)
+      ansible.builtin.shell: |
+        set -e
+        chmod +x {{ script_install }}
+        printf "A\n" | {{ script_install }}
+        touch {{ marker_file }}
+      args:
+        chdir: "{{ scadabr_dir }}"
+        creates: "{{ marker_file }}"
