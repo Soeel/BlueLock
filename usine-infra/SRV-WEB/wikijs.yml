@@ -1,0 +1,210 @@
+- name: Install Wiki.js on SRV-WEB (Debian 12 Bookworm)
+  hosts: wiki
+  become: true
+
+  vars:
+    wikijs_user: wikijs
+    wikijs_dir: /var/wiki
+    wikijs_port: 3000
+
+    db_name: wiki
+    db_user: wikijs
+    db_password: "ChangeMe-Strong-DB-Pass"
+
+  tasks:
+
+    - name: Modify hostname
+      ansible.builtin.hostname:
+        name: "SRV-WEB"
+    # --------------------
+    # CLEAN BAD REPOS (NodeSource)
+    # --------------------
+    
+    - name: Ensure keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Find any NodeSource apt list files
+      ansible.builtin.find:
+        paths: /etc/apt/sources.list.d
+        patterns: "*nodesource*"
+        file_type: file
+      register: nodesource_lists
+
+    - name: Remove NodeSource apt list files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ nodesource_lists.files }}"
+
+    - name: Remove NodeSource keyring if present
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/nodesource.gpg
+        state: absent
+
+    # --------------------
+    # APT BASE
+    # --------------------
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install sudo (required for become_user)
+      ansible.builtin.apt:
+        name: sudo
+        state: present
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - tar
+          - gzip
+          - wget
+          - postgresql
+          - postgresql-contrib
+          - python3-psycopg2
+        state: present
+
+    # --------------------
+    # BACKPORTS (Debian 12)
+    # --------------------
+    - name: Enable bookworm-backports
+      ansible.builtin.apt_repository:
+        repo: "deb http://deb.debian.org/debian bookworm-backports main"
+        filename: bookworm-backports
+        state: present
+
+    - name: Update apt cache after enabling backports
+      ansible.builtin.apt:
+        update_cache: true
+
+    # --------------------
+    # NODE.JS (from backports)
+    # --------------------
+    - name: Install Node.js from backports
+      ansible.builtin.apt:
+        name:
+          - nodejs
+          - npm
+        state: present
+        default_release: bookworm-backports
+
+    - name: Show Node.js version
+      ansible.builtin.command: node -v
+      register: nodev
+      changed_when: false
+
+    - name: Debug Node version
+      ansible.builtin.debug:
+        msg: "Node: {{ nodev.stdout }}"
+
+    # --------------------
+    # POSTGRESQL
+    # --------------------
+    - name: Ensure PostgreSQL is running
+      ansible.builtin.service:
+        name: postgresql
+        state: started
+        enabled: true
+
+    - name: Create PostgreSQL user for Wiki.js
+      community.postgresql.postgresql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        state: present
+      become_user: postgres
+
+    - name: Create PostgreSQL database for Wiki.js
+      community.postgresql.postgresql_db:
+        name: "{{ db_name }}"
+        owner: "{{ db_user }}"
+        state: present
+      become_user: postgres
+
+    # --------------------
+    # WIKI.JS INSTALL
+    # --------------------
+    - name: Create wikijs system user
+      ansible.builtin.user:
+        name: "{{ wikijs_user }}"
+        system: true
+        create_home: false
+        shell: /usr/sbin/nologin
+
+    - name: Create Wiki.js directory
+      ansible.builtin.file:
+        path: "{{ wikijs_dir }}"
+        state: directory
+        owner: "{{ wikijs_user }}"
+        group: "{{ wikijs_user }}"
+        mode: "0755"
+
+    - name: Download Wiki.js
+      ansible.builtin.get_url:
+        url: https://github.com/Requarks/wiki/releases/latest/download/wiki-js.tar.gz
+        dest: /tmp/wiki-js.tar.gz
+        mode: "0644"
+
+    - name: Extract Wiki.js
+      ansible.builtin.unarchive:
+        src: /tmp/wiki-js.tar.gz
+        dest: "{{ wikijs_dir }}"
+        remote_src: true
+        owner: "{{ wikijs_user }}"
+        group: "{{ wikijs_user }}"
+
+    # --------------------
+    # CONFIGURATION
+    # --------------------
+    - name: Create Wiki.js config.yml
+      ansible.builtin.copy:
+        dest: "{{ wikijs_dir }}/config.yml"
+        owner: "{{ wikijs_user }}"
+        group: "{{ wikijs_user }}"
+        mode: "0640"
+        content: |
+          port: {{ wikijs_port }}
+          db:
+            type: postgres
+            host: localhost
+            port: 5432
+            user: {{ db_user }}
+            pass: {{ db_password }}
+            db: {{ db_name }}
+
+    # --------------------
+    # SYSTEMD
+    # --------------------
+    - name: Create systemd service for Wiki.js
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/wiki.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Wiki.js
+          After=network.target postgresql.service
+
+          [Service]
+          Type=simple
+          User={{ wikijs_user }}
+          Group={{ wikijs_user }}
+          WorkingDirectory={{ wikijs_dir }}
+          ExecStart=/usr/bin/node server
+          Restart=always
+          Environment=NODE_ENV=production
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable and start Wiki.js
+      ansible.builtin.systemd:
+        name: wiki
+        enabled: true
+        state: restarted
+        daemon_reload: true
