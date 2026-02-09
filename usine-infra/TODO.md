@@ -61,13 +61,13 @@ Serveur : SRV-FILES01
 - Création du domaine usine.local
 - Création des comptes et groupes
 
-### SRV-FILES01 && APP01
+### SRV-FILES-APP
 - Rôle File Server
 - Partages SMB
  - Joindre le domaine
 - Installer prérequis applicatifs :
-  - IIS / .NET (si besoin)
-  - SQL Server Express (optionnel)
+  - IIS / .NET 
+  - SQL Server Express
 - Déployer une application factice (MES / ERP local)
 
 ### LNX-SCADA01
@@ -95,5 +95,6 @@ Serveur : SRV-FILES01
 - Enregistrement des données dans l’Historian
 
 - Accès web au portail interne
+
 
 
