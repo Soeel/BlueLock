@@ -15,12 +15,13 @@ services:
   #   5. Émettre les certs       : scripts/03-issue-cert.sh <service> <dns>
   # ─────────────────────────────────────────────────────────────────────────────
 
-  # Init container : corrige les permissions des volumes pour l'UID 100 (vault)
-  # Nécessaire car depuis Vault 1.13+, le container tourne en non-root
+  # Init container : corrige les permissions des volumes pour l'utilisateur vault
+  # Utilise la même image que Vault pour résoudre vault:vault en UID:GID exacts
   vault-init-perms:
-    image: alpine:3.19
+    image: hashicorp/vault:${VAULT_VERSION}
     user: root
-    command: sh -c "chown -R 100:1000 /vault/data /vault/logs"
+    entrypoint: sh
+    command: -c "chown -R vault:vault /vault/data /vault/logs"
     volumes:
       - vault-data:/vault/data
       - vault-logs:/vault/logs
