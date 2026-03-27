@@ -70,7 +70,7 @@ openssl req -x509 \
     -out    "${CERTS_DIR}/vault.crt" \
     -config /tmp/vault-openssl.cnf
 
-chmod 600 "${CERTS_DIR}/vault.key"
+chmod 644 "${CERTS_DIR}/vault.key"  # Lisible par le user vault (non-root) dans le container
 chmod 644 "${CERTS_DIR}/vault.crt"
 rm -f /tmp/vault-openssl.cnf
 
