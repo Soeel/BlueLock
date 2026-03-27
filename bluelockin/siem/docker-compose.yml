@@ -1,0 +1,169 @@
+services:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # SIEM BlueLock — Elasticsearch + Kibana
+  #
+  # Les certificats TLS sont fournis et renouvelés automatiquement par
+  # vault-agent qui se connecte à Vault sur VM2 via AppRole.
+  #
+  # Déploiement :
+  #   Sur VM2 : bluelockin/pki/scripts/05-create-siem-approle.sh
+  #   Sur VM1 : scripts/01-setup-agent.sh <role_id> <secret_id> <vault_ip>
+  #   Sur VM1 : docker compose up -d
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # ── Vault Agent : récupère et renouvelle les certs depuis Vault (VM2) ────────
+  vault-agent:
+    image: hashicorp/vault:${VAULT_VERSION}
+    container_name: bluelock-vault-agent
+    restart: unless-stopped
+    command: vault agent -config=/vault/config/vault-agent.hcl
+    volumes:
+      - ./vault-agent/vault-agent.hcl:/vault/config/vault-agent.hcl:ro
+      - ./vault-agent/auth:/vault/auth:ro
+      - ./vault-agent/certs:/vault/certs:ro      # root_ca.crt pour vérifier Vault TLS
+      - siem-certs:/certs                         # Volume partagé avec ES et Kibana
+    networks:
+      - bluelock
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /certs/elasticsearch/cert.pem && test -f /certs/elasticsearch/key.pem && test -f /certs/kibana/cert.pem && test -f /certs/kibana/key.pem"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 15s
+
+  # ── Init : configure le mot de passe kibana_system ───────────────────────────
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    container_name: bluelock-setup
+    user: "0"
+    command: >
+      bash -c '
+        echo "Waiting for Elasticsearch...";
+        until curl -s --cacert /certs/root_ca.crt \
+          https://elasticsearch:9200 | grep -q "missing authentication credentials"; do
+          sleep 5;
+        done;
+        echo "Setting kibana_system password...";
+        until curl -s -X POST \
+          --cacert /certs/root_ca.crt \
+          -u "elastic:${ELASTIC_PASSWORD}" \
+          -H "Content-Type: application/json" \
+          https://elasticsearch:9200/_security/user/kibana_system/_password \
+          -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do
+          sleep 5;
+        done;
+        echo "Done.";
+      '
+    volumes:
+      - siem-certs:/certs:ro
+    networks:
+      - bluelock
+    depends_on:
+      vault-agent:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+
+  # ── Elasticsearch ─────────────────────────────────────────────────────────────
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    container_name: bluelock-elasticsearch
+    restart: unless-stopped
+    depends_on:
+      vault-agent:
+        condition: service_healthy
+    environment:
+      - node.name=elasticsearch
+      - cluster.name=${CLUSTER_NAME}
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.certificate=/usr/share/elasticsearch/config/certs/elasticsearch/cert.pem
+      - xpack.security.http.ssl.key=/usr/share/elasticsearch/config/certs/elasticsearch/key.pem
+      - xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/root_ca.crt
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/config/certs/elasticsearch/cert.pem
+      - xpack.security.transport.ssl.key=/usr/share/elasticsearch/config/certs/elasticsearch/key.pem
+      - xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/root_ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=${LICENSE}
+      - ES_JAVA_OPTS=-Xms${ES_HEAP_SIZE} -Xmx${ES_HEAP_SIZE}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - siem-certs:/usr/share/elasticsearch/config/certs:ro
+      - esdata:/usr/share/elasticsearch/data
+    ports:
+      - "127.0.0.1:9200:9200"
+    networks:
+      - bluelock
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert /usr/share/elasticsearch/config/certs/root_ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'"
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  # ── Kibana ────────────────────────────────────────────────────────────────────
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+    container_name: bluelock-kibana
+    restart: unless-stopped
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    environment:
+      - SERVERNAME=kibana
+      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=/usr/share/kibana/config/certs/root_ca.crt
+      - SERVER_SSL_ENABLED=true
+      - SERVER_SSL_CERTIFICATE=/usr/share/kibana/config/certs/kibana/cert.pem
+      - SERVER_SSL_KEY=/usr/share/kibana/config/certs/kibana/key.pem
+      - XPACK_SECURITY_ENCRYPTIONKEY=${KIBANA_ENCRYPTION_KEY}
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${KIBANA_ENCRYPTION_KEY}
+      - I18N_LOCALE=fr-FR
+    volumes:
+      - siem-certs:/usr/share/kibana/config/certs:ro
+      - kibanadata:/usr/share/kibana/data
+    ports:
+      - "5601:5601"
+    networks:
+      - bluelock
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s -I --cacert /usr/share/kibana/config/certs/root_ca.crt https://localhost:5601 | grep -q 'HTTP/1.1 302 Found'"
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+volumes:
+  siem-certs:
+    driver: local
+  esdata:
+    driver: local
+  kibanadata:
+    driver: local
+
+networks:
+  bluelock:
+    name: bluelock
+    driver: bridge
