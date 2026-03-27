@@ -1,0 +1,61 @@
+services:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PKI — Step-CA
+  #
+  # Architecture deux niveaux :
+  #   Root CA (offline) → Intermediate CA (online, signe les certificats)
+  #
+  # Au premier démarrage, step-ca crée automatiquement :
+  #   - root_ca.crt + root_ca_key (chiffrée)
+  #   - intermediate_ca.crt + intermediate_ca_key (chiffrée)
+  #
+  # Après init, exécuter scripts/01-secure-root-key.sh pour
+  # extraire et mettre hors ligne la clé Root CA.
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  pki:
+    image: smallstep/step-ca:${STEP_CA_VERSION}
+    container_name: bluelock-pki
+    restart: unless-stopped
+    environment:
+      # Auto-initialisation au premier démarrage (ignoré si ca.json existe déjà)
+      - DOCKER_STEPCA_INIT_NAME=${CA_NAME}
+      - DOCKER_STEPCA_INIT_DNS_NAMES=${CA_DNS_NAMES}
+      - DOCKER_STEPCA_INIT_ADDRESS=:9000
+      - DOCKER_STEPCA_INIT_PROVISIONER_NAME=${CA_PROVISIONER_NAME}
+      - DOCKER_STEPCA_INIT_PASSWORD_FILE=/run/secrets/ca_password
+      - DOCKER_STEPCA_INIT_ACME=true
+    secrets:
+      - ca_password
+    volumes:
+      - pki-data:/home/step
+    ports:
+      # Exposé sur toutes les interfaces pour que la VM SIEM puisse émettre des certs
+      # Restreindre via firewall au niveau VM (uniquement VM1 et VM2 autorisées)
+      - "9000:9000"
+    networks:
+      - bluelock
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "step ca health --ca-url https://localhost:9000 --root /home/step/certs/root_ca.crt 2>/dev/null | grep -q ok"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+secrets:
+  ca_password:
+    file: ./secrets/ca_password.txt
+
+volumes:
+  pki-data:
+    driver: local
+
+networks:
+  bluelock:
+    name: bluelock
+    driver: bridge

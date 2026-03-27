@@ -1,0 +1,13 @@
+# Secrets — ne jamais committer
+secrets/ca_password.txt
+secrets/provisioner_password.txt
+
+# Clé Root CA hors ligne — ne jamais committer
+root-ca-offline/
+
+# Certificats et clés émis — sensibles
+certs/*/key.pem
+certs/root_ca.crt
+
+# Données persistantes Docker
+pki-data/
