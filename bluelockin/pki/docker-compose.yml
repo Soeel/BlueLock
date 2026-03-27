@@ -15,10 +15,23 @@ services:
   #   5. Émettre les certs       : scripts/03-issue-cert.sh <service> <dns>
   # ─────────────────────────────────────────────────────────────────────────────
 
+  # Init container : corrige les permissions des volumes pour l'UID 100 (vault)
+  # Nécessaire car depuis Vault 1.13+, le container tourne en non-root
+  vault-init-perms:
+    image: alpine:3.19
+    user: root
+    command: sh -c "chown -R 100:1000 /vault/data /vault/logs"
+    volumes:
+      - vault-data:/vault/data
+      - vault-logs:/vault/logs
+
   vault:
     image: hashicorp/vault:${VAULT_VERSION}
     container_name: bluelock-vault
     restart: unless-stopped
+    depends_on:
+      vault-init-perms:
+        condition: service_completed_successfully
     cap_add:
       - IPC_LOCK  # Empêche la mémoire contenant les secrets d'être swappée sur disque
     environment:
@@ -27,7 +40,7 @@ services:
     volumes:
       - vault-data:/vault/data
       - vault-logs:/vault/logs
-      - ./config:/vault/config:ro
+      - ./config:/vault/config      # Sans :ro — Vault tente un chown au démarrage
       - ./certs:/vault/certs:ro
     ports:
       - "8200:8200"
