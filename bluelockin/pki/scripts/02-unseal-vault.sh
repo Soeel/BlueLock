@@ -30,10 +30,11 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
     exit 1
 fi
 
-SEALED=$(docker exec \
+STATUS_JSON=$(docker exec \
     -e VAULT_ADDR=https://127.0.0.1:8200 \
     -e VAULT_CACERT=/vault/certs/vault.crt \
-    "${CONTAINER}" vault status -format=json 2>/dev/null \
+    "${CONTAINER}" vault status -format=json 2>/dev/null || true)
+SEALED=$(echo "$STATUS_JSON" \
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('sealed','true'))" 2>/dev/null || echo "true")
 
 if [ "$SEALED" = "False" ] || [ "$SEALED" = "false" ]; then

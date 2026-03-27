@@ -36,12 +36,15 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
 fi
 
 # ── Attendre que Vault réponde ────────────────────────────────────────────────
+# vault status exit code 2 = sealed (normal), 1 = erreur, 0 = ok
+# On capture dans une variable avec || true pour éviter l'échec du pipeline
 echo "Attente du démarrage de Vault..."
 for i in $(seq 1 30); do
-    if docker exec \
+    STATUS=$(docker exec \
         -e VAULT_ADDR=https://127.0.0.1:8200 \
         -e VAULT_CACERT=/vault/certs/vault.crt \
-        "${CONTAINER}" vault status -format=json 2>/dev/null | grep -q '"initialized"'; then
+        "${CONTAINER}" vault status 2>&1 || true)
+    if echo "$STATUS" | grep -q "Initialized"; then
         break
     fi
     echo "  (tentative ${i}/30)..."
@@ -49,10 +52,11 @@ for i in $(seq 1 30); do
 done
 
 # ── Vérifier si déjà initialisé ───────────────────────────────────────────────
-INITIALIZED=$(docker exec \
+STATUS_JSON=$(docker exec \
     -e VAULT_ADDR=https://127.0.0.1:8200 \
     -e VAULT_CACERT=/vault/certs/vault.crt \
-    "${CONTAINER}" vault status -format=json 2>/dev/null \
+    "${CONTAINER}" vault status -format=json 2>/dev/null || true)
+INITIALIZED=$(echo "$STATUS_JSON" \
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('initialized','false'))" 2>/dev/null || echo "false")
 
 if [ "$INITIALIZED" = "True" ] || [ "$INITIALIZED" = "true" ]; then
