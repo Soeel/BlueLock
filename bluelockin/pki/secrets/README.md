@@ -1,26 +1,23 @@
-# Secrets PKI
+# Secrets PKI — HashiCorp Vault
 
-Ce dossier contient les mots de passe de la PKI BlueLock.
+Ce dossier contient les credentials générés lors de l'initialisation de Vault.
 **Ces fichiers ne sont pas versionnés (.gitignore).**
 
-## Fichiers à créer manuellement
+## `vault-init.json` (généré automatiquement)
 
-### `ca_password.txt`
-Mot de passe de chiffrement des clés Root CA et Intermediate CA.
-Utilisé au démarrage du container step-ca.
+Créé par `scripts/01-init-vault.sh`. Contient :
+- `unseal_keys_b64` — 5 unseal keys (3 requises pour désceller)
+- `root_token` — Token root Vault (accès total)
 
-```bash
-echo "VotreMotDePasseCA" > ca_password.txt
-chmod 600 ca_password.txt
-```
+**Stocker une copie chiffrée hors ligne (support USB chiffré, coffre...).**
+Sans ces clés, les données Vault sont définitivement inaccessibles.
 
-### `provisioner_password.txt`
-Mot de passe du provisioner JWK (utilisé pour émettre des certificats).
+## Rotation recommandée après setup
 
 ```bash
-echo "VotreMotDePasseProvisioner" > provisioner_password.txt
-chmod 600 provisioner_password.txt
-```
+# Créer un token admin avec TTL limité (remplace le root token pour les opérations courantes)
+vault token create -policy=pki-issue -ttl=720h -display-name=pki-admin
 
-> **Important** : Utiliser des mots de passe forts (min. 20 caractères).
-> Stocker une copie chiffrée hors ligne avec la Root CA.
+# Révoquer le root token une fois les opérations terminées
+vault token revoke <root-token>
+```

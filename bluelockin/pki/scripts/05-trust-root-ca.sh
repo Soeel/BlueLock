@@ -1,12 +1,11 @@
 #!/bin/bash
 # =============================================================================
-# 03-trust-root-ca.sh
+# 05-trust-root-ca.sh
 #
-# Installe le certificat Root CA BlueLock comme autorité de confiance
-# sur la machine locale (Linux).
-# À exécuter sur VM1 (SIEM) et VM2 (Bastion+PKI).
+# Installe le Root CA BlueLock comme autorité de confiance système (Linux).
+# À exécuter sur VM1 (SIEM) et toute machine devant valider les certificats.
 #
-# Usage : sudo ./scripts/03-trust-root-ca.sh <chemin/vers/root_ca.crt>
+# Usage : sudo ./scripts/05-trust-root-ca.sh <chemin/vers/root_ca.crt>
 # =============================================================================
 set -euo pipefail
 
@@ -31,9 +30,6 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-echo "Installation du Root CA BlueLock..."
-
-# Détecter la distribution
 if [ -f /etc/debian_version ]; then
     cp "$ROOT_CERT" /usr/local/share/ca-certificates/bluelock-root-ca.crt
     update-ca-certificates
@@ -46,6 +42,3 @@ else
 fi
 
 echo -e "${GREEN}✓ Root CA BlueLock installée comme autorité de confiance.${NC}"
-echo ""
-echo "Vérification :"
-echo "  openssl verify -CAfile ${ROOT_CERT} <cert-à-vérifier>.pem"

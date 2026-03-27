@@ -1,13 +1,12 @@
-# Secrets — ne jamais committer
-secrets/ca_password.txt
-secrets/provisioner_password.txt
+# Secrets Vault — ne jamais committer
+secrets/vault-init.json
 
-# Clé Root CA hors ligne — ne jamais committer
-root-ca-offline/
-
-# Certificats et clés émis — sensibles
+# Clés privées et certificats émis
 certs/*/key.pem
 certs/root_ca.crt
+certs/vault.key
+certs/vault.crt
 
-# Données persistantes Docker
-pki-data/
+# Données persistantes Docker (volumes)
+vault-data/
+vault-logs/

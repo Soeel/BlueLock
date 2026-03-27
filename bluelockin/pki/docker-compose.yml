@@ -1,58 +1,54 @@
 services:
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # PKI — Step-CA
+  # HashiCorp Vault — PKI BlueLock
   #
-  # Architecture deux niveaux :
-  #   Root CA (offline) → Intermediate CA (online, signe les certificats)
+  # Architecture PKI deux niveaux dans Vault :
+  #   Mount pki/      → Root CA     (utilisé une fois pour signer l'intermediate)
+  #   Mount pki_int/  → Intermediate CA (émet les certificats des services)
   #
-  # Au premier démarrage, step-ca crée automatiquement :
-  #   - root_ca.crt + root_ca_key (chiffrée)
-  #   - intermediate_ca.crt + intermediate_ca_key (chiffrée)
-  #
-  # Après init, exécuter scripts/01-secure-root-key.sh pour
-  # extraire et mettre hors ligne la clé Root CA.
+  # Déploiement :
+  #   1. Créer le cert bootstrap : scripts/00-bootstrap-tls.sh
+  #   2. Démarrer Vault          : docker compose up -d
+  #   3. Initialiser Vault       : scripts/01-init-vault.sh
+  #   4. Configurer la PKI       : scripts/02-setup-pki.sh
+  #   5. Émettre les certs       : scripts/03-issue-cert.sh <service> <dns>
   # ─────────────────────────────────────────────────────────────────────────────
 
-  pki:
-    image: smallstep/step-ca:${STEP_CA_VERSION}
-    container_name: bluelock-pki
+  vault:
+    image: hashicorp/vault:${VAULT_VERSION}
+    container_name: bluelock-vault
     restart: unless-stopped
+    cap_add:
+      - IPC_LOCK  # Empêche la mémoire contenant les secrets d'être swappée sur disque
     environment:
-      # Auto-initialisation au premier démarrage (ignoré si ca.json existe déjà)
-      - DOCKER_STEPCA_INIT_NAME=${CA_NAME}
-      - DOCKER_STEPCA_INIT_DNS_NAMES=${CA_DNS_NAMES}
-      - DOCKER_STEPCA_INIT_ADDRESS=:9000
-      - DOCKER_STEPCA_INIT_PROVISIONER_NAME=${CA_PROVISIONER_NAME}
-      - DOCKER_STEPCA_INIT_PASSWORD_FILE=/run/secrets/ca_password
-      - DOCKER_STEPCA_INIT_ACME=true
-    secrets:
-      - ca_password
+      - VAULT_ADDR=https://127.0.0.1:8200
+      - VAULT_CACERT=/vault/certs/vault.crt
     volumes:
-      - pki-data:/home/step
+      - vault-data:/vault/data
+      - vault-logs:/vault/logs
+      - ./config:/vault/config:ro
+      - ./certs:/vault/certs:ro
     ports:
-      # Exposé sur toutes les interfaces pour que la VM SIEM puisse émettre des certs
-      # Restreindre via firewall au niveau VM (uniquement VM1 et VM2 autorisées)
-      - "9000:9000"
+      - "8200:8200"
+    command: vault server -config=/vault/config/vault.hcl
     networks:
       - bluelock
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "step ca health --ca-url https://localhost:9000 --root /home/step/certs/root_ca.crt 2>/dev/null | grep -q ok"
+          "vault status -address=https://127.0.0.1:8200 -ca-cert=/vault/certs/vault.crt 2>&1 | grep -E '(Initialized|Sealed)'"
         ]
-      interval: 15s
+      interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 10s
-
-secrets:
-  ca_password:
-    file: ./secrets/ca_password.txt
+      retries: 20
+      start_period: 5s
 
 volumes:
-  pki-data:
+  vault-data:
+    driver: local
+  vault-logs:
     driver: local
 
 networks:
