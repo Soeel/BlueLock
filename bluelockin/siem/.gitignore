@@ -1,0 +1,6 @@
+# Credentials Vault Agent
+vault-agent/auth/role_id
+vault-agent/auth/secret_id
+
+# Root CA copié depuis la PKI
+vault-agent/certs/root_ca.crt

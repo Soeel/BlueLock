@@ -1,0 +1,12 @@
+# Secrets Vault — ne jamais committer
+secrets/vault-init.json
+
+# Clés privées et certificats émis
+certs/*/key.pem
+certs/root_ca.crt
+certs/vault.key
+certs/vault.crt
+
+# Données persistantes Docker (volumes)
+vault-data/
+vault-logs/
