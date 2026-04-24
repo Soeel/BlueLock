@@ -1,6 +1,0 @@
-# Certificats PKI (copiés depuis bluelockin/pki/certs/)
-certs/cert.pem
-certs/key.pem
-
-# Scripts SQL générés (contiennent le hash du mot de passe admin)
-initdb/
