@@ -117,5 +117,9 @@ L’analyse PESTEL met en évidence un contexte industriel contraint,
 marqué par l’isolement des sites, la présence d’environnements legacy
 et des exigences fortes en matière de continuité de production et de conformité.
 Ces éléments justifient une approche pragmatique,
+
+
+<img width="1491" height="1055" alt="image" src="https://github.com/user-attachments/assets/b2790e08-eab1-459d-a984-0f0cc0fd50a7" />
+
 centrée sur un socle de sécurité minimal, non intrusif et standardisable,
 adapté à des sites industriels nouvellement acquis.
