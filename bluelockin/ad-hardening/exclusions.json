@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "schemaVersion": "1.0",
+    "description": "Registre des risques acceptes. Chaque mesure listee ici sera IGNOREE par le hardening. Toute exclusion DOIT comporter measureId, justification (>= 20 caracteres), acceptedBy et acceptedDate, sinon le script s'arrete en erreur."
+  },
+  "exclusions": [
+    {
+      "measureId": "HAD-NTLM-001",
+      "justification": "Applications metier legacy (ERP v8) encore dependantes de NTLMv1. Migration planifiee Q3. Risque accepte temporairement.",
+      "acceptedBy": "j.dupont (RSSI)",
+      "acceptedDate": "2026-06-15",
+      "reviewDate": "2026-09-30"
+    }
+  ]
+}
