@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  vault-global:
+    image: hashicorp/vault:1.15
+    container_name: vault-global
+    ports:
+      - "8200:8200"
+    environment:
+      # Mode dev : Parfait pour la démo, déverrouillé par défaut avec un token fixe
+      VAULT_DEV_ROOT_TOKEN_ID: "root_pki_token_2026"
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    cap_add:
+      - IPC_LOCK # Recommandé par HashiCorp pour empêcher le swap mémoire des secrets
+    restart: always
+    networks:
+      - pki-net
+
+networks:
+  pki-net:
+    name: pki-global-network
+    driver: bridge

@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # 1. Le moteur de protocole (RDP, SSH, VNC)
+  guacd:
+    image: guacamole/guacd
+    container_name: guacd
+    restart: always
+    networks:
+      - bastion-net
+
+  # 2. La base de données PostgreSQL
+  guacamole-db:
+    image: postgres:15
+    container_name: guacamole-db
+    environment:
+      POSTGRES_DB: "guacamole_db"
+      POSTGRES_USER: "guac_user"
+      POSTGRES_PASSWORD: "SafePassword123"
+    volumes:
+      - ./init:/docker-entrypoint-initdb.d
+      - guac-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guac_user -d guacamole_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - bastion-net
+
+  # 3. L'interface Web du Bastion (Apache Guacamole)
+  guacamole:
+    image: guacamole/guacamole
+    container_name: guacamole
+    environment:
+      # Connexion Base de données
+      POSTGRESQL_HOSTNAME: guacamole-db
+      POSTGRESQL_DATABASE: "guacamole_db"
+      POSTGRESQL_USER: "guac_user"
+      POSTGRESQL_PASSWORD: "SafePassword123"
+      
+      # Connexion au moteur guacd
+      GUACD_HOSTNAME: guacd
+      
+      # Configuration LDAP / Active Directory
+      # LDAP_HOSTNAME: "192.168.1.10"
+      # LDAP_PORT: 389
+      # LDAP_ENCRYPTION_METHOD: none
+      # LDAP_USER_BASE_DN: "OU=Users,DC=digisec,DC=local"
+      # LDAP_GROUP_BASE_DN: "OU=Groups,DC=digisec,DC=local"
+    depends_on:
+      guacamole-db:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: always
+    networks:
+      - bastion-net  # <-- TRÈS IMPORTANT : Met Guacamole sur le même réseau
+
+  # 4. Le Reverse Proxy qui consomme la PKI Globale (Exigence 27) 
+  reverse-proxy:
+    image: nginx:alpine
+    container_name: bastion-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./vault-agent/certs:/etc/nginx/certs:ro
+    depends_on:
+      - guacamole
+    restart: always
+    networks:
+      - bastion-net
+
+networks:
+  bastion-net:
+    driver: bridge
+
+volumes:
+  guac-db-data:
