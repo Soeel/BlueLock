@@ -85,9 +85,27 @@ try {
         if (-not $modPath) {
             throw "Module introuvable : $mod`nCherche dans :`n  - $root\$mod`n  - $root\Modules\$mod"
         }
-        . $modPath
-        Write-Host "  [OK] $mod" -ForegroundColor DarkGray
+        try {
+            . $modPath
+            Write-Host "  [OK] $mod" -ForegroundColor DarkGray
+        }
+        catch {
+            Write-Host "  [FAIL] $mod : $($_.Exception.Message)" -ForegroundColor Red
+            throw "Echec du chargement de $mod. Verifiez la syntaxe du fichier."
+        }
     }
+
+    # Verification que les fonctions critiques sont bien chargees
+    $requiredFunctions = @('Invoke-PingCastleScan', 'ConvertFrom-PingCastleReport', 'Compare-PingCastleScoring',
+                           'Import-ExclusionFile', 'New-RiskRegister',
+                           'Invoke-HardeningTask',
+                           'New-HardeningReport')
+    foreach ($fn in $requiredFunctions) {
+        if (-not (Get-Command $fn -ErrorAction SilentlyContinue)) {
+            throw "Fonction '$fn' introuvable apres chargement des modules. Un module a probablement echoue silencieusement."
+        }
+    }
+    Write-Host "  Toutes les fonctions critiques OK." -ForegroundColor Green
 
     # --- Chargement catalogue ---
     if (-not $ConfigPath -or -not (Test-Path $ConfigPath)) {

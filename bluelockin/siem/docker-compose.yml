@@ -48,6 +48,11 @@ services:
       - ELASTICSEARCH_PASSWORD=Basile44
       - SERVER_SSL_ENABLED=false
       - I18N_LOCALE=fr-FR
+      # Clés de chiffrement persistantes (Format requis pour l'API des règles d'alertes)
+      - XPACK_SECURITY_ENCRYPTIONKEY=abcdefghijklmnopqrstuvwxyz123456
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=abcdefghijklmnopqrstuvwxyz123456
+      - XPACK_REPORTING_ENCRYPTIONKEY=abcdefghijklmnopqrstuvwxyz123456
+      - XPACK_ACTION_ENCRYPTIONKEY=abcdefghijklmnopqrstuvwxyz123456
     volumes:
       - kibanadata:/usr/share/kibana/data
     networks:
