@@ -1,0 +1,93 @@
+{
+  "metadata": {
+    "schemaVersion": "1.0",
+    "description": "Catalogue declaratif des mesures de hardening AD. Le tiering (comptes, OU, groupes, GPO) est gere par un script separe et n'est PAS traite ici.",
+    "author": "Harden-AD-Scoring"
+  },
+  "tasks": [
+    {
+      "id": "HAD-SMB-001",
+      "name": "Disable SMBv1",
+      "description": "Desactive le protocole SMBv1, vulnerable (EternalBlue) et obsolete.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-SMB1",
+      "severity": "High",
+      "applyFunction": "Disable-SMBv1",
+      "rollbackFunction": "Enable-SMBv1",
+      "testFunction": "Test-SMBv1Disabled",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-LDAP-001",
+      "name": "Enforce LDAP Signing",
+      "description": "Impose la signature LDAP sur les controleurs de domaine (LDAPServerIntegrity=2).",
+      "category": "Anomalies",
+      "pingCastleRule": "A-LDAPSigning",
+      "severity": "High",
+      "applyFunction": "Enable-LDAPSigning",
+      "rollbackFunction": "Disable-LDAPSigning",
+      "testFunction": "Test-LDAPSigning",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-LDAP-002",
+      "name": "Enable LDAP Channel Binding",
+      "description": "Active le channel binding LDAP (LdapEnforceChannelBinding=2).",
+      "category": "Anomalies",
+      "pingCastleRule": "A-LDAPChannelBinding",
+      "severity": "Medium",
+      "applyFunction": "Enable-LDAPChannelBinding",
+      "rollbackFunction": "Disable-LDAPChannelBinding",
+      "testFunction": "Test-LDAPChannelBinding",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-SPOOL-001",
+      "name": "Disable Print Spooler on DCs",
+      "description": "Desactive le service Print Spooler sur les DC (mitigation PrintNightmare).",
+      "category": "PrivilegedAccounts",
+      "pingCastleRule": "A-DC-Spooler",
+      "severity": "High",
+      "applyFunction": "Disable-PrintSpooler",
+      "rollbackFunction": "Enable-PrintSpooler",
+      "testFunction": "Test-PrintSpoolerDisabled",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-NTLM-001",
+      "name": "Restrict NTLM (audit then restrict)",
+      "description": "Renforce la politique NTLM. Par defaut applique le niveau AUDIT pour eviter de casser le legacy.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-NTLMv1",
+      "severity": "Medium",
+      "applyFunction": "Set-NTLMRestriction",
+      "rollbackFunction": "Reset-NTLMRestriction",
+      "testFunction": "Test-NTLMRestriction",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-KRB-001",
+      "name": "Protect against unconstrained delegation",
+      "description": "Marque les comptes sensibles 'Account is sensitive and cannot be delegated' et audite les delegations non contraintes.",
+      "category": "PrivilegedAccounts",
+      "pingCastleRule": "P-Delegated",
+      "severity": "High",
+      "applyFunction": "Protect-Delegation",
+      "rollbackFunction": "Unprotect-Delegation",
+      "testFunction": "Test-Delegation",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-PWD-001",
+      "name": "Enforce machine account password rotation policy",
+      "description": "Verifie/applique DisablePasswordChange=0 et MaximumPasswordAge sur les comptes machine.",
+      "category": "StaleObjects",
+      "pingCastleRule": "S-PwdNeverExpires",
+      "severity": "Low",
+      "applyFunction": "Set-MachinePasswordPolicy",
+      "rollbackFunction": "Reset-MachinePasswordPolicy",
+      "testFunction": "Test-MachinePasswordPolicy",
+      "canBeSkipped": true
+    }
+  ]
+}

@@ -83,3 +83,6 @@ Les opportunités offertes par le cadre du projet
 permettent de valoriser notre travail,
 tandis que les menaces identifiées justifient
 une approche pragmatique et réaliste.
+
+<img width="970" height="355" alt="image" src="https://github.com/user-attachments/assets/5c224a28-0d57-4cf1-90ef-5d2b6b186190" />
+
