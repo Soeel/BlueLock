@@ -6,36 +6,28 @@
 
 .DESCRIPTION
     Inspire de l'architecture config-driven du projet HardenAD (LoicVeirman/HardenAD).
-    Enchaine : scan PingCastle baseline -> validation des exclusions justifiees
-    (risques acceptes) -> application des mesures retenues -> scan PingCastle post ->
-    rapport comparatif + registre des risques.
+    Supporte une structure a plat (tous les fichiers dans le meme dossier) ou en
+    sous-dossiers (Configs/ et Modules/).
 
-    Le TIERING (comptes Tier0/1/2, OU, groupes, GPO, CSV) est gere par un script
-    SEPARE et n'est PAS traite ici.
-
-    Les exclusions sont fournies via un FICHIER pre-rempli (mode non-interactif).
-    Toute exclusion non justifiee interrompt l'execution.
+    Le TIERING est gere par un script SEPARE.
 
 .PARAMETER PingCastlePath
     Chemin vers PingCastle.exe.
 
 .PARAMETER ConfigPath
-    Chemin du catalogue de mesures (defaut : Configs\hardening-tasks.json).
+    Chemin du catalogue de mesures (auto-detecte si absent).
 
 .PARAMETER ExclusionPath
-    Chemin du fichier d'exclusions (defaut : Configs\exclusions.json).
+    Chemin du fichier d'exclusions (auto-detecte si absent).
 
 .PARAMETER DryRun
-    Simulation : aucune modification appliquee (les scans PingCastle restent identiques).
+    Simulation : aucune modification appliquee.
 
 .PARAMETER SkipBaselineScan / SkipFinalScan
     Permet de sauter un scan (utile en test).
 
 .EXAMPLE
-    .\Invoke-HardenAD.ps1 -PingCastlePath C:\PingCastle\PingCastle.exe -DryRun
-
-.EXAMPLE
-    .\Invoke-HardenAD.ps1 -PingCastlePath C:\PingCastle\PingCastle.exe
+    .\Invoke-HardenAD.ps1 -PingCastlePath .\PingCastle.exe -DryRun
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -50,11 +42,23 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 
-# Defauts
-if (-not $ConfigPath)    { $ConfigPath    = Join-Path $root 'Configs\hardening-tasks.json' }
-if (-not $ExclusionPath) { $ExclusionPath = Join-Path $root 'Configs\exclusions.json' }
+# --- Cherche un fichier a plat ou en sous-dossier ---
+function Find-ProjectFile {
+    param([string]$FileName, [string]$SubDir)
+    $flat = Join-Path $root $FileName
+    if (Test-Path $flat) { return (Resolve-Path $flat).Path }
+    if ($SubDir) {
+        $nested = Join-Path (Join-Path $root $SubDir) $FileName
+        if (Test-Path $nested) { return (Resolve-Path $nested).Path }
+    }
+    return $null
+}
 
-# Repertoires de sortie horodates
+# --- Auto-detection des configs ---
+if (-not $ConfigPath)    { $ConfigPath    = Find-ProjectFile 'hardening-tasks.json' 'Configs' }
+if (-not $ExclusionPath) { $ExclusionPath = Find-ProjectFile 'exclusions.json'      'Configs' }
+
+# --- Repertoires de sortie ---
 $stamp     = Get-Date -Format 'yyyyMMdd-HHmmss'
 $outDir    = Join-Path $root "Outputs\$stamp"
 $logDir    = Join-Path $root 'Logs'
@@ -65,31 +69,51 @@ Start-Transcript -Path $transcript -Force | Out-Null
 
 function Write-Step($msg) { Write-Host "`n=== $msg ===" -ForegroundColor Cyan }
 
-try {
-    # Import des modules
-    Write-Step 'Initialisation'
-    Import-Module (Join-Path $root 'Modules\HAD.PingCastle.psm1')   -Force
-    Import-Module (Join-Path $root 'Modules\HAD.RiskRegister.psm1') -Force
-    Import-Module (Join-Path $root 'Modules\HAD.Hardening.psm1')    -Force
-    Import-Module (Join-Path $root 'Modules\HAD.Reporting.psm1')    -Force
+Write-Host "Racine du projet : $root" -ForegroundColor DarkGray
 
-    # Chargement catalogue
-    if (-not (Test-Path $ConfigPath)) { throw "Catalogue introuvable : $ConfigPath" }
+try {
+    # --- Chargement des modules par dot-sourcing (plus robuste que Import-Module) ---
+    Write-Step 'Initialisation'
+    $moduleFiles = @(
+        'HAD.PingCastle.psm1',
+        'HAD.RiskRegister.psm1',
+        'HAD.Hardening.psm1',
+        'HAD.Reporting.psm1'
+    )
+    foreach ($mod in $moduleFiles) {
+        $modPath = Find-ProjectFile $mod 'Modules'
+        if (-not $modPath) {
+            throw "Module introuvable : $mod`nCherche dans :`n  - $root\$mod`n  - $root\Modules\$mod"
+        }
+        . $modPath
+        Write-Host "  [OK] $mod" -ForegroundColor DarkGray
+    }
+
+    # --- Chargement catalogue ---
+    if (-not $ConfigPath -or -not (Test-Path $ConfigPath)) {
+        throw "Catalogue introuvable (hardening-tasks.json).`nCherche dans : $root et $root\Configs"
+    }
     $catalog = (Get-Content $ConfigPath -Raw | ConvertFrom-Json).tasks
     $knownIds = $catalog.id
     Write-Host "$($catalog.Count) mesure(s) chargee(s)." -ForegroundColor Green
 
-    # Validation des exclusions justifiees (interrompt si non justifie)
+    # --- Validation des exclusions ---
     Write-Step 'Validation des exclusions (risques acceptes)'
-    $exclusions = Import-ExclusionFile -Path $ExclusionPath -KnownMeasureIds $knownIds -Verbose
+    if (-not $ExclusionPath -or -not (Test-Path $ExclusionPath)) {
+        Write-Host "Aucun fichier d'exclusions trouve. Toutes les mesures seront appliquees." -ForegroundColor Yellow
+        $exclusions = @()
+    }
+    else {
+        $exclusions = Import-ExclusionFile -Path $ExclusionPath -KnownMeasureIds $knownIds -Verbose
+    }
     $excludedIds = @($exclusions.MeasureId)
     Write-Host "$($excludedIds.Count) mesure(s) exclue(s) avec justification." -ForegroundColor Yellow
 
-    # Registre des risques
+    # --- Registre des risques ---
     $riskRegisterPath = Join-Path $outDir 'risk_register.json'
     $riskRegister = New-RiskRegister -Exclusions $exclusions -Catalog $catalog -OutputPath $riskRegisterPath -Verbose
 
-    # Scan baseline
+    # --- Scan baseline ---
     $scoreBefore = $null
     if (-not $SkipBaselineScan) {
         Write-Step 'Scan PingCastle baseline (avant)'
@@ -98,7 +122,7 @@ try {
         Write-Host "Score global avant : $($scoreBefore.GlobalScore)" -ForegroundColor Green
     }
 
-    # Application des mesures retenues
+    # --- Application des mesures ---
     Write-Step 'Application des mesures'
     $appliedResults = New-Object System.Collections.Generic.List[psobject]
     foreach ($task in $catalog) {
@@ -116,7 +140,7 @@ try {
         Write-Host " [$($r.Status)] $($task.id) - $($task.name)" -ForegroundColor $color
     }
 
-    # Scan final
+    # --- Scan final ---
     $scoreAfter = $null
     if (-not $SkipFinalScan -and -not $DryRun) {
         Write-Step 'Scan PingCastle post-hardening (apres)'
@@ -125,7 +149,7 @@ try {
         Write-Host "Score global apres : $($scoreAfter.GlobalScore)" -ForegroundColor Green
     }
 
-    # Rapport comparatif
+    # --- Rapport ---
     if ($scoreBefore -and $scoreAfter) {
         Write-Step 'Generation du rapport comparatif'
         $comparison = Compare-PingCastleScoring -Before $scoreBefore -After $scoreAfter

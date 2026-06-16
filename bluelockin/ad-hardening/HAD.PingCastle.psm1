@@ -146,4 +146,3 @@ function Compare-PingCastleScoring {
     }
 }
 
-Export-ModuleMember -Function Invoke-PingCastleScan, ConvertFrom-PingCastleReport, Compare-PingCastleScoring
