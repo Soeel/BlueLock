@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
 
-  # ── Elasticsearch (Sécurité basique activée, sans TLS) ──────────────────────────
+  # ── Elasticsearch (Sécurité basique activée, sans TLS en interne) ──────────────────
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
     container_name: bluelock-elasticsearch
@@ -12,12 +12,10 @@ services:
       - cluster.name=bluelock-siem-cluster
       - discovery.type=single-node
       - bootstrap.memory_lock=true
-      - xpack.security.enabled=true
-      # Désactivation de TLS pour le HTTP et le Transport
-      - xpack.security.http.ssl.enabled=false
-      - xpack.security.transport.ssl.enabled=false
-      - xpack.license.self_generated.type=basic
-      # Allocation de 4 Go de RAM (parfait pour ta VM de 8 Go)
+      - XPACK_SECURITY_ENCRYPTIONKEY=abcdefghijklmnopqrstuvwxyz123456
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=abcdefghijklmnopqrstuvwxyz123456
+      - XPACK_REPORTING_ENCRYPTIONKEY=abcdefghijklmnopqrstuvwxyz123456
+      - XPACK_ACTION_ENCRYPTIONKEY=abcdefghijklmnopqrstuvwxyz123456
       - ES_JAVA_OPTS=-Xms4g -Xmx4g
     ulimits:
       memlock:
@@ -26,21 +24,16 @@ services:
     volumes:
       - esdata:/usr/share/elasticsearch/data
     ports:
-      # Ouvert sur toutes les interfaces pour y accéder depuis Windows 11
       - "9200:9200"
     networks:
       - bluelock
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -s http://localhost:9200 | grep -q 'missing authentication credentials'"
-        ]
+      test: ["CMD-SHELL", "curl -s http://localhost:9200 | grep -q 'missing authentication credentials'"]
       interval: 10s
       timeout: 10s
       retries: 120
 
-  # ── Kibana (Connecté en HTTP simple) ───────────────────────────────────────────
+  # ── Kibana (Connecté en HTTP simple en interne derrière le proxy) ──────────────────
   kibana:
     image: docker.elastic.co/kibana/kibana:8.12.2
     container_name: bluelock-kibana
@@ -50,28 +43,35 @@ services:
         condition: service_healthy
     environment:
       - SERVERNAME=kibana
-      # Connexion à ES en http:// au lieu de https://
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - ELASTICSEARCH_USERNAME=kibana_system
-      # Utilise le mot de passe que tu vas générer à l'étape suivante
       - ELASTICSEARCH_PASSWORD=Basile44
       - SERVER_SSL_ENABLED=false
       - I18N_LOCALE=fr-FR
     volumes:
       - kibanadata:/usr/share/kibana/data
-    ports:
-      - "5601:5601"
     networks:
       - bluelock
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'"
-        ]
+      test: ["CMD-SHELL", "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302'"]
       interval: 10s
       timeout: 10s
       retries: 120
+
+  # ── Nginx Reverse Proxy (Exposition HTTPS de Kibana) ───────────────────────────────
+  siem-proxy:
+    image: nginx:alpine
+    container_name: siem-proxy
+    restart: unless-stopped
+    ports:
+      - "8443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./vault-agent/certs:/etc/nginx/certs:ro
+    depends_on:
+      - kibana
+    networks:
+      - bluelock
 
 volumes:
   esdata:

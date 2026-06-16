@@ -1,78 +1,22 @@
 version: '3.8'
 
 services:
-  # 1. Le moteur de protocole
-  guacd:
-    image: guacamole/guacd
-    container_name: guacd
-    restart: always
-    networks:
-      - bastion-net
-
-  # 2. La base de données
-  guacamole-db:
-    image: postgres:15
-    container_name: guacamole-db
-    environment:
-      POSTGRES_DB: "guacamole_db"
-      POSTGRES_USER: "guac_user"
-      POSTGRES_PASSWORD: "SafePassword123"
-    volumes:
-      - ./init:/docker-entrypoint-initdb.d
-      - guac-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U guac_user -d guacamole_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: always
-    networks:
-      - bastion-net
-
-  # 3. L'interface Web Du Bastion
-  guacamole:
-    image: guacamole/guacamole
-    container_name: guacamole
-    environment:
-      POSTGRES_HOSTNAME: guacamole-db
-      POSTGRES_DATABASE: "guacamole_db"
-      POSTGRES_USER: "guac_user"
-      POSTGRES_PASSWORD: "SafePassword123"
-      GUACD_HOSTNAME: guacd
-    depends_on:
-      guacamole-db:
-        condition: service_healthy
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    restart: always
-    networks:
-      - bastion-net
-
-  # 4. Le Reverse Proxy Nginx
-  reverse-proxy:
-    image: nginx:alpine
-    container_name: bastion-proxy
+  vault-global:
+    image: hashicorp/vault:1.15
+    container_name: vault-global
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      # L'ASTUCE ICI : On monte le volume nommé géré nativement par Docker
-      - pki-certs:/etc/nginx/certs:ro
-    depends_on:
-      - guacamole
+      - "8200:8200"
+    environment:
+      # Mode dev : Parfait pour la démo, déverrouillé par défaut avec un token fixe
+      VAULT_DEV_ROOT_TOKEN_ID: "root_pki_token_2026"
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    cap_add:
+      - IPC_LOCK # Recommandé par HashiCorp pour empêcher le swap mémoire des secrets
     restart: always
     networks:
-      - bastion-net
+      - pki-net
 
 networks:
-  bastion-net:
+  pki-net:
+    name: pki-global-network
     driver: bridge
-
-volumes:
-  guac-db-data:
-  # On déclare le volume partagé pour stocker les certs de manière étanche
-  pki-certs:

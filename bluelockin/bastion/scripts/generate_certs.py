@@ -3,7 +3,7 @@ import json
 import requests
 
 # 1. Configuration des paramètres (Industrialisables via variables d'environnement)
-VAULT_ADDR = os.getenv("VAULT_ADDR", "http://localhost:8200")
+VAULT_ADDR = os.getenv("VAULT_ADDR", "http://10.30.0.152:8200")
 VAULT_TOKEN = "root_pki_token_2026"
 
 # CORRECTION : Forçage du chemin au format Linux natif pour s'aligner avec Docker
