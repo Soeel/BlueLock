@@ -53,10 +53,14 @@ services:
       # Connexion à ES en http:// au lieu de https://
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - ELASTICSEARCH_USERNAME=kibana_system
-      # Utilise le mot de passe que tu vas générer à l'étape suivante
       - ELASTICSEARCH_PASSWORD=Basile44
       - SERVER_SSL_ENABLED=false
       - I18N_LOCALE=fr-FR
+      # Clés de chiffrement persistantes (Format requis pour l'API des règles d'alertes)
+      - xpack_security_encryptionKey=abcdefghijklmnopqrstuvwxyz123456
+      - xpack_encryptedSavedObjects_encryptionKey=abcdefghijklmnopqrstuvwxyz123456
+      - xpack_reporting_encryptionKey=abcdefghijklmnopqrstuvwxyz123456
+      - xpack_action_encryptionKey=abcdefghijklmnopqrstuvwxyz123456
     volumes:
       - kibanadata:/usr/share/kibana/data
     ports:
