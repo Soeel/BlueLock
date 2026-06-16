@@ -1,111 +1,80 @@
-#Requires -Version 5.1
 <#
 .SYNOPSIS
     HAD.RiskRegister - Validation des exclusions justifiees (risques acceptes).
-.DESCRIPTION
-    Mode non-interactif : charge un fichier d'exclusions pre-rempli, valide que chaque
-    exclusion comporte les champs obligatoires, et produit le registre des risques
-    accepte horodate pour preuve d'audit. Aucune exclusion non justifiee n'est toleree.
 #>
 
-$script:MinJustificationLength = 20
-$script:RequiredFields = @('measureId', 'justification', 'acceptedBy', 'acceptedDate')
-
 function Import-ExclusionFile {
-    <#
-    .SYNOPSIS
-        Charge et VALIDE le fichier d'exclusions. Leve une exception si une exclusion
-        est incomplete ou mal justifiee. Le but : impossible de desactiver une mesure
-        sans justification formelle.
-    .PARAMETER Path
-        Chemin du fichier exclusions.json.
-    .PARAMETER KnownMeasureIds
-        Liste des IDs de mesures valides (issus du catalogue) pour detecter les fautes de frappe.
-    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][string[]]$KnownMeasureIds
     )
 
+    $MinJustLen = 20
+    $RequiredFields = @('measureId', 'justification', 'acceptedBy', 'acceptedDate')
+
     if (-not (Test-Path $Path)) {
-        Write-Verbose "Aucun fichier d'exclusions ($Path). Toutes les mesures seront appliquees."
+        Write-Verbose "Aucun fichier d exclusions ($Path). Toutes les mesures seront appliquees."
         return @()
     }
 
     try {
-        $data = Get-Content -Path $Path -Raw | ConvertFrom-Json
+        $raw = Get-Content -Path $Path -Raw -Encoding UTF8
+        $data = $raw | ConvertFrom-Json
     }
     catch {
-        throw "Fichier d'exclusions illisible (JSON invalide) : $($_.Exception.Message)"
+        throw "Fichier d exclusions illisible (JSON invalide) : $($_.Exception.Message)"
     }
 
     if (-not $data.exclusions) { return @() }
 
-    $errors = New-Object System.Collections.Generic.List[string]
-    $validated = New-Object System.Collections.Generic.List[psobject]
+    $errors = @()
+    $validated = @()
 
     foreach ($ex in $data.exclusions) {
-        $ctx = if ($ex.measureId) { $ex.measureId } else { '(measureId manquant)' }
+        if ($ex.measureId) { $ctx = $ex.measureId } else { $ctx = '(measureId manquant)' }
 
         # 1. Champs obligatoires
-        foreach ($field in $script:RequiredFields) {
-            if ([string]::IsNullOrWhiteSpace($ex.$field)) {
-                $errors.Add("[$ctx] Champ obligatoire manquant ou vide : '$field'.")
+        foreach ($field in $RequiredFields) {
+            $val = $ex.$field
+            if (-not $val -or [string]::IsNullOrWhiteSpace($val)) {
+                $errors += "[$ctx] Champ obligatoire manquant ou vide : $field"
             }
         }
 
         # 2. Justification suffisamment etayee
-        if (-not [string]::IsNullOrWhiteSpace($ex.justification) -and
-            $ex.justification.Trim().Length -lt $script:MinJustificationLength) {
-            $errors.Add("[$ctx] Justification trop courte (min $script:MinJustificationLength caracteres).")
+        if ($ex.justification -and $ex.justification.Trim().Length -lt $MinJustLen) {
+            $errors += "[$ctx] Justification trop courte (min $MinJustLen caracteres)."
         }
 
-        # 3. measureId existe reellement dans le catalogue
-        if ($ex.measureId -and $ex.measureId -notin $KnownMeasureIds) {
-            $errors.Add("[$ctx] measureId inconnu : ne correspond a aucune mesure du catalogue.")
+        # 3. measureId existe dans le catalogue
+        if ($ex.measureId -and ($KnownMeasureIds -notcontains $ex.measureId)) {
+            $errors += "[$ctx] measureId inconnu : ne correspond a aucune mesure du catalogue."
         }
 
-        # 4. Date valide
-        if ($ex.acceptedDate) {
-            [datetime]$parsed = [datetime]::MinValue
-            if (-not [datetime]::TryParse($ex.acceptedDate, [ref]$parsed)) {
-                $errors.Add("[$ctx] acceptedDate n'est pas une date valide : '$($ex.acceptedDate)'.")
-            }
-        }
-
-        if ($errors.Count -eq 0 -or $ex.measureId -in $KnownMeasureIds) {
-            $validated.Add([pscustomobject]@{
+        # 4. Ajout a la liste validee (si pas d erreur pour cette entree)
+        if ($ex.measureId -and ($KnownMeasureIds -contains $ex.measureId)) {
+            $obj = New-Object PSObject -Property @{
                 MeasureId     = $ex.measureId
                 Justification = $ex.justification
                 AcceptedBy    = $ex.acceptedBy
                 AcceptedDate  = $ex.acceptedDate
                 ReviewDate    = $ex.reviewDate
-            })
+            }
+            $validated += $obj
         }
     }
 
     if ($errors.Count -gt 0) {
-        $msg = "Validation des exclusions echouee. Le hardening est interrompu pour eviter une desactivation non justifiee :`n - " +
-               ($errors -join "`n - ")
+        $msg = "Validation des exclusions echouee :`n - " + ($errors -join "`n - ")
         throw $msg
     }
 
     Write-Verbose "$($validated.Count) exclusion(s) validee(s)."
-    return $validated.ToArray()
+    return $validated
 }
 
 function New-RiskRegister {
-    <#
-    .SYNOPSIS
-        Produit le registre des risques accepte final, horodate, pour archivage/audit.
-    .PARAMETER Exclusions
-        Exclusions validees (issues de Import-ExclusionFile).
-    .PARAMETER Catalog
-        Catalogue complet (pour enrichir avec severite/categorie de chaque mesure).
-    .PARAMETER OutputPath
-        Chemin de sortie du registre JSON.
-    #>
     [CmdletBinding()]
     param(
         [psobject[]]$Exclusions,
@@ -113,9 +82,10 @@ function New-RiskRegister {
         [Parameter(Mandatory)][string]$OutputPath
     )
 
-    $entries = foreach ($ex in $Exclusions) {
+    $entries = @()
+    foreach ($ex in $Exclusions) {
         $measure = $Catalog | Where-Object { $_.id -eq $ex.MeasureId } | Select-Object -First 1
-        [pscustomobject]@{
+        $entry = New-Object PSObject -Property @{
             MeasureId     = $ex.MeasureId
             MeasureName   = $measure.name
             Category      = $measure.category
@@ -126,18 +96,18 @@ function New-RiskRegister {
             AcceptedDate  = $ex.AcceptedDate
             ReviewDate    = $ex.ReviewDate
         }
+        $entries += $entry
     }
 
-    $register = [pscustomobject]@{
+    $register = New-Object PSObject -Property @{
         GeneratedAt    = (Get-Date).ToString('o')
         Operator       = "$env:USERDOMAIN\$env:USERNAME"
         Hostname       = $env:COMPUTERNAME
-        AcceptedRisks  = @($entries)
-        TotalAccepted  = @($entries).Count
+        AcceptedRisks  = $entries
+        TotalAccepted  = $entries.Count
     }
 
     $register | ConvertTo-Json -Depth 6 | Set-Content -Path $OutputPath -Encoding UTF8
     Write-Verbose "Registre des risques ecrit : $OutputPath"
     return $register
 }
-
