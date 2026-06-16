@@ -186,4 +186,3 @@ function Test-MachinePasswordPolicy {
 
 #endregion
 
-Export-ModuleMember -Function * -Alias *

@@ -141,4 +141,3 @@ function New-RiskRegister {
     return $register
 }
 
-Export-ModuleMember -Function Import-ExclusionFile, New-RiskRegister

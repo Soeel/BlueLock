@@ -82,4 +82,3 @@ $($riskRows -join "`n")
     return $OutputPath
 }
 
-Export-ModuleMember -Function New-HardeningReport
