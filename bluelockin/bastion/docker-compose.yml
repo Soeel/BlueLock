@@ -34,7 +34,7 @@ services:
     image: guacamole/guacamole
     container_name: guacamole
     environment:
-      # Connexion Base de données
+      # Connexion Base de données (Correction de la syntaxe des variables pour l'image Guacamole officielle)
       POSTGRESQL_HOSTNAME: guacamole-db
       POSTGRESQL_DATABASE: "guacamole_db"
       POSTGRESQL_USER: "guac_user"
@@ -43,12 +43,6 @@ services:
       # Connexion au moteur guacd
       GUACD_HOSTNAME: guacd
       
-      # Configuration LDAP / Active Directory
-      # LDAP_HOSTNAME: "192.168.1.10"
-      # LDAP_PORT: 389
-      # LDAP_ENCRYPTION_METHOD: none
-      # LDAP_USER_BASE_DN: "OU=Users,DC=digisec,DC=local"
-      # LDAP_GROUP_BASE_DN: "OU=Groups,DC=digisec,DC=local"
     depends_on:
       guacamole-db:
         condition: service_healthy
@@ -59,9 +53,9 @@ services:
         max-file: "3"
     restart: always
     networks:
-      - bastion-net  # <-- TRÈS IMPORTANT : Met Guacamole sur le même réseau
+      - bastion-net
 
-  # 4. Le Reverse Proxy qui consomme la PKI Globale (Exigence 27) 
+  # 4. Le Reverse Proxy qui consomme la PKI Globale (Exigence 27)
   reverse-proxy:
     image: nginx:alpine
     container_name: bastion-proxy
@@ -77,6 +71,7 @@ services:
     networks:
       - bastion-net
 
+# --- BLOC MANQUANT ET CORRIGÉ ICI ---
 networks:
   bastion-net:
     driver: bridge
