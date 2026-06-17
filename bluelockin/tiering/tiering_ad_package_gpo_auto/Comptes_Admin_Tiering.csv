@@ -1,0 +1,16 @@
+Nom;Prenom;CompteAdmin;UPN;Equipe;Service;Fonction;Manager;NiveauTiering;OUCible
+MARTIN;Lucas;admt1lmartin;admt1lmartin@AUTO_DOMAIN;Infrastructure;DSI;Admin serveur;Pierre Legrand;T1;OU=T1,OU=Admins,DC=AUTO,DC=LOCAL
+BERNARD;Emma;admt1ebernard;admt1ebernard@AUTO_DOMAIN;Reseau;DSI;Admin reseau;Sophie Garnier;T1;OU=T1,OU=Admins,DC=AUTO,DC=LOCAL
+DUBOIS;Hugo;admt0hdubois;admt0hdubois@AUTO_DOMAIN;Securite;Cybersecurite;Admin domaine;Thomas Marchal;T0;OU=T0,OU=Admins,DC=AUTO,DC=LOCAL
+THOMAS;Lea;admt0lthomas;admt0lthomas@AUTO_DOMAIN;AD;IAM;Admin AD;Julie Perrot;T0;OU=T0,OU=Admins,DC=AUTO,DC=LOCAL
+ROBERT;Nathan;admt2nrobert;admt2nrobert@AUTO_DOMAIN;Support N2;Support IT;Admin poste;Nicolas Roy;T2;OU=T2,OU=Admins,DC=AUTO,DC=LOCAL
+RICHARD;Chloe;admt2crichard;admt2crichard@AUTO_DOMAIN;Support N1;Support IT;Admin poste;Pierre Legrand;T2;OU=T2,OU=Admins,DC=AUTO,DC=LOCAL
+PETIT;Gabriel;admt1gpetit;admt1gpetit@AUTO_DOMAIN;Bastion;Cybersecurite;Admin bastion;Sophie Garnier;T1;OU=T1,OU=Admins,DC=AUTO,DC=LOCAL
+DURAND;Manon;admt1mdurand;admt1mdurand@AUTO_DOMAIN;SIEM;Cybersecurite;Admin SIEM;Thomas Marchal;T1;OU=T1,OU=Admins,DC=AUTO,DC=LOCAL
+LEROY;Louis;admt2lleroy;admt2lleroy@AUTO_DOMAIN;Poste de travail;DSI;Admin poste;Julie Perrot;T2;OU=T2,OU=Admins,DC=AUTO,DC=LOCAL
+MOREAU;Camille;admt2cmoreau;admt2cmoreau@AUTO_DOMAIN;Applications;DSI;Admin applicatif;Nicolas Roy;T2;OU=T2,OU=Admins,DC=AUTO,DC=LOCAL
+SIMON;Jules;admt1jsimon;admt1jsimon@AUTO_DOMAIN;Infrastructure;DSI;Admin serveur;Pierre Legrand;T1;OU=T1,OU=Admins,DC=AUTO,DC=LOCAL
+LAURENT;Ines;admt1ilaurent;admt1ilaurent@AUTO_DOMAIN;Reseau;DSI;Admin reseau;Sophie Garnier;T1;OU=T1,OU=Admins,DC=AUTO,DC=LOCAL
+LEFEBVRE;Arthur;admt0alefebvre;admt0alefebvre@AUTO_DOMAIN;Securite;Cybersecurite;Admin domaine;Thomas Marchal;T0;OU=T0,OU=Admins,DC=AUTO,DC=LOCAL
+MICHEL;Sarah;admt0smichel;admt0smichel@AUTO_DOMAIN;AD;IAM;Admin AD;Julie Perrot;T0;OU=T0,OU=Admins,DC=AUTO,DC=LOCAL
+GARCIA;Noah;admt2ngarcia;admt2ngarcia@AUTO_DOMAIN;Support N2;Support IT;Admin poste;Nicolas Roy;T2;OU=T2,OU=Admins,DC=AUTO,DC=LOCAL

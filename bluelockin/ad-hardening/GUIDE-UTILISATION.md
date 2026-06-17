@@ -26,6 +26,8 @@ Harden-AD-Scoring/
 │   ├── HAD.PingCastle.psm1        Scan PingCastle et parsing XML
 │   ├── HAD.RiskRegister.psm1      Validation des exclusions
 │   ├── HAD.Hardening.psm1         Moteur d'application des mesures
+│   ├── HAD.Gpo.psm1               Déploiement par GPO (-DeployVia Gpo)
+│   ├── HAD.Laps.psm1              Déploiement de Windows LAPS (-EnableLaps)
 │   └── HAD.Reporting.psm1         Génération du rapport HTML
 ├── Logs/                          Transcripts d'exécution
 └── Outputs/                       Sorties horodatées (rapports, registres)
@@ -60,6 +62,63 @@ Le script enchaîne automatiquement : scan PingCastle avant → validation des e
 # Sauter le scan final
 .\Invoke-HardenAD.ps1 -PingCastlePath "C:\Tools\PingCastle\PingCastle.exe" -SkipFinalScan
 ```
+
+### 4. Exiger le rôle contrôleur de domaine
+
+```powershell
+.\Invoke-HardenAD.ps1 -PingCastlePath "C:\Tools\PingCastle\PingCastle.exe" -RequireDomainController
+```
+
+Sans ce commutateur, l'absence de rôle DC produit seulement un avertissement (utile pour tester depuis une station d'administration). Les pré-vérifications (session admin, module `ActiveDirectory`, présence de PingCastle) s'exécutent dans tous les cas.
+
+### 5. Annuler les mesures (rollback)
+
+```powershell
+.\Invoke-HardenAD.ps1 -PingCastlePath "C:\Tools\PingCastle\PingCastle.exe" -Rollback
+```
+
+Appelle la `rollbackFunction` de chaque mesure non exclue pour restaurer une valeur sûre. Pour une restauration **exacte** des valeurs de registre antérieures, utiliser le fichier `registry_backup.json` avec `Restore-HADRegistryBackup`.
+
+### 6. Rendre bloquantes les revues d'exclusion dépassées
+
+```powershell
+.\Invoke-HardenAD.ps1 -PingCastlePath "C:\Tools\PingCastle\PingCastle.exe" -StrictReview
+```
+
+Une exclusion dont `reviewDate` est passée déclenche alors une **erreur** (au lieu d'un simple avertissement).
+
+### 7. Déployer par GPO (`-DeployVia Gpo`)
+
+```powershell
+# Crée/met à jour une GPO dédiée, liée à l'OU des contrôleurs de domaine
+.\Invoke-HardenAD.ps1 -PingCastlePath "C:\Tools\PingCastle\PingCastle.exe" -DeployVia Gpo
+
+# Cibler une autre OU et nommer la GPO
+.\Invoke-HardenAD.ps1 -PingCastlePath "C:\Tools\PingCastle\PingCastle.exe" -DeployVia Gpo `
+    -GpoName "Sec - Hardening DC" -GpoTarget "OU=Domain Controllers,DC=corp,DC=local"
+
+# Rollback GPO = suppression de la GPO (et de ses liens)
+.\Invoke-HardenAD.ps1 -PingCastlePath "C:\Tools\PingCastle\PingCastle.exe" -DeployVia Gpo -Rollback
+```
+
+En mode `Gpo`, les 9 mesures de type registre sont écrites dans une **GPO dédiée** (s'applique à **tous les DC**, persistant) au lieu du registre local. Les mesures niveau domaine/forêt/service restent en application directe. Prérequis : module **GroupPolicy** (présent sur un DC). Journal des opérations : `gpo_backup.json`.
+
+### 8. Déployer Windows LAPS (`-EnableLaps`)
+
+```powershell
+# Déploiement complet : schéma (irréversible) + permissions + GPO LAPS
+.\Invoke-HardenAD.ps1 -PingCastlePath "C:\Tools\PingCastle\PingCastle.exe" `
+    -EnableLaps -ConfirmSchemaExtension -LapsComputersOU "OU=Servers,DC=corp,DC=local"
+
+# Sans -ConfirmSchemaExtension : si le schéma n'est pas déjà étendu, l'étape est BLOQUÉE
+.\Invoke-HardenAD.ps1 -PingCastlePath "C:\Tools\PingCastle\PingCastle.exe" `
+    -EnableLaps -LapsComputersOU "OU=Servers,DC=corp,DC=local"
+
+# Rollback LAPS = suppression de la GPO LAPS (schéma conservé, irréversible)
+.\Invoke-HardenAD.ps1 -PingCastlePath "C:\Tools\PingCastle\PingCastle.exe" -EnableLaps -Rollback
+```
+
+Windows LAPS fait tourner/sauvegarde le mot de passe administrateur **local** de chaque machine dans AD. L'**extension de schéma** est `Update-LapsADSchema` (forêt entière, **irréversible**, *Schema Admins*) et n'est tentée qu'avec `-ConfirmSchemaExtension`. Le détail des 4 étapes est écrit dans `laps_deployment.json`. Prérequis : Windows LAPS (Windows récent patché) + module **GroupPolicy**.
 
 ---
 
@@ -107,9 +166,23 @@ Les identifiants sont listés dans `Configs/hardening-tasks.json`. Mesures actue
 | HAD-LDAP-001    | LDAP Signing obligatoire                       | High     |
 | HAD-LDAP-002    | LDAP Channel Binding                           | Medium   |
 | HAD-SPOOL-001   | Print Spooler désactivé sur les DC             | High     |
+| HAD-WDIGEST-001 | Désactivation WDigest                          | High     |
+| HAD-LSASS-001   | Protection LSASS (RunAsPPL)                    | High     |
+| HAD-LMHASH-001  | Interdiction du stockage des hash LM           | Medium   |
+| HAD-ANON-001    | Restriction de l'énumération anonyme           | Medium   |
 | HAD-NTLM-001    | Restriction NTLM (mode audit)                  | Medium   |
-| HAD-KRB-001     | Protection contre la délégation non contrainte  | High     |
+| HAD-MAQ-001     | ms-DS-MachineAccountQuota = 0                   | Medium   |
+| HAD-KRB-001     | Audit de la délégation non contrainte           | High     |
 | HAD-PWD-001     | Rotation des mots de passe machine              | Low      |
+| HAD-WEBCLIENT-001 | Désactivation WebClient (WebDAV) sur les DC   | Medium   |
+| HAD-RECYCLEBIN-001 | Activation de la Corbeille AD (irréversible) | Medium   |
+| HAD-PWDLEN-001  | Longueur minimale de mot de passe (≥ 12)        | Medium   |
+| HAD-DSHEUR-001  | Interdiction du LDAP anonyme (dsHeuristics)     | Medium   |
+| HAD-PREWIN2000-001 | Nettoyage de Pre-Windows 2000 Compatible Access | Medium |
+| HAD-REVERSIBLE-001 | Désactivation du chiffrement réversible des mots de passe | High |
+| HAD-LMAUTH-001  | Forçage de NTLMv2 (LmCompatibilityLevel=5)      | Medium   |
+| HAD-PREAUTH-001 | Réactivation de la pré-auth Kerberos (anti AS-REP) | High  |
+| HAD-DES-001     | Audit des comptes en chiffrement DES            | Medium   |
 
 ---
 
@@ -165,10 +238,17 @@ Après exécution, les sorties sont dans `Outputs/<timestamp>/` :
 | pingcastle_after.xml   | Rapport PingCastle après hardening                   |
 | risk_register.json     | Registre horodaté des risques acceptés (preuve audit)|
 | report.html            | Rapport comparatif visuel (ouvrir dans un navigateur)|
+| run_summary.json       | Résumé complet du run (machine-readable)             |
+| measures.csv           | Liste des mesures et statuts (tableur)               |
+| registry_backup.json   | Valeurs de registre antérieures (restauration exacte)|
+| state_backup.json      | États AD antérieurs (politique mot de passe, dsHeuristics, groupes)|
+| gpo_backup.json        | Journal des opérations GPO (mode `-DeployVia Gpo` ou `-EnableLaps`) |
+| laps_deployment.json   | Détail des étapes du déploiement Windows LAPS (`-EnableLaps`) |
+| rollback_results.json  | Résultats du mode `-Rollback` (si utilisé)           |
 
-Le **rapport HTML** contient trois sections : le delta de score PingCastle (global et par catégorie), la liste des mesures avec leur statut (Applied, Skipped, Error), et le registre complet des risques acceptés avec justifications.
+Le **rapport HTML** contient : des cartes de synthèse, le delta de score PingCastle (global et par catégorie) avec règles résolues/apparues, la liste des mesures avec leur statut, et le registre complet des risques acceptés (les revues expirées sont surlignées).
 
-Les **transcripts** PowerShell sont dans `Logs/harden-<timestamp>.log`.
+Les **logs** PowerShell sont dans `Logs/harden-<timestamp>.log` (transcript) et `Logs/harden-<timestamp>.struct.log` (log structuré horodaté).
 
 ---
 
@@ -181,6 +261,8 @@ Les **transcripts** PowerShell sont dans `Logs/harden-<timestamp>.log`.
 | WouldApply               | Mode DryRun : la mesure serait appliquée               |
 | AppliedButNotVerified    | Appliquée mais le test de vérification a échoué        |
 | Skipped - Risk Accepted  | Exclue via le fichier d'exclusions                     |
+| RolledBack               | Mesure annulée (mode `-Rollback`)                      |
+| Skipped - Irreversible   | Rollback ignoré : mesure non réversible (ex. Corbeille AD) |
 | Error                    | Échec de l'application (voir le message détaillé)      |
 
 ---

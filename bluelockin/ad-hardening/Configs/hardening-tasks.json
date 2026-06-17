@@ -1,0 +1,482 @@
+{
+  "metadata": {
+    "schemaVersion": "2.0",
+    "description": "Catalogue declaratif des mesures de hardening AD. Inspire de l'architecture config-driven de HardenAD (LoicVeirman). Le TIERING (comptes Tier0/1/2, OU, groupes, GPO de tiering) est gere par un script SEPARE execute AVANT, et n'est volontairement PAS traite ici.",
+    "author": "BlueLock - ad-hardening",
+    "categories": [
+      "Anomalies",
+      "PrivilegedAccounts",
+      "StaleObjects",
+      "Trusts"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "HAD-SMB-001",
+      "name": "Desactiver SMBv1",
+      "description": "Desactive le protocole SMBv1, vulnerable (EternalBlue/WannaCry) et obsolete.",
+      "category": "Anomalies",
+      "pingCastleRule": "S-SMB-v1",
+      "severity": "High",
+      "appliesTo": "AllServers",
+      "rebootRequired": true,
+      "applyFunction": "Disable-SMBv1",
+      "rollbackFunction": "Enable-SMBv1",
+      "testFunction": "Test-SMBv1Disabled",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-LDAP-001",
+      "name": "Imposer la signature LDAP",
+      "description": "Impose la signature LDAP sur les controleurs de domaine (LDAPServerIntegrity=2) pour bloquer le relayage LDAP.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-LDAPSigningRequired",
+      "severity": "High",
+      "appliesTo": "DomainController",
+      "rebootRequired": true,
+      "applyFunction": "Enable-LDAPSigning",
+      "rollbackFunction": "Disable-LDAPSigning",
+      "testFunction": "Test-LDAPSigning",
+      "gpo": {
+        "key": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters",
+        "values": [
+          { "valueName": "LDAPServerIntegrity", "type": "DWord", "value": 2 }
+        ]
+      },
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-LDAP-002",
+      "name": "Activer LDAP Channel Binding",
+      "description": "Active le channel binding LDAPS (LdapEnforceChannelBinding=2) pour bloquer le relayage vers LDAPS.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-LDAPChannelBinding",
+      "severity": "Medium",
+      "appliesTo": "DomainController",
+      "rebootRequired": true,
+      "applyFunction": "Enable-LDAPChannelBinding",
+      "rollbackFunction": "Disable-LDAPChannelBinding",
+      "testFunction": "Test-LDAPChannelBinding",
+      "gpo": {
+        "key": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters",
+        "values": [
+          { "valueName": "LdapEnforceChannelBinding", "type": "DWord", "value": 2 }
+        ]
+      },
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-SPOOL-001",
+      "name": "Desactiver le Print Spooler sur les DC",
+      "description": "Desactive le service Print Spooler sur les controleurs de domaine (mitigation PrintNightmare / spoolsample).",
+      "category": "PrivilegedAccounts",
+      "pingCastleRule": "A-DC-Spooler",
+      "severity": "High",
+      "appliesTo": "DomainController",
+      "rebootRequired": false,
+      "applyFunction": "Disable-PrintSpooler",
+      "rollbackFunction": "Enable-PrintSpooler",
+      "testFunction": "Test-PrintSpoolerDisabled",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-WDIGEST-001",
+      "name": "Desactiver WDigest (mots de passe en clair en memoire)",
+      "description": "Force UseLogonCredential=0 pour empecher le stockage des mots de passe en clair dans LSASS (mitigation Mimikatz/sekurlsa).",
+      "category": "Anomalies",
+      "pingCastleRule": "A-WDigest",
+      "severity": "High",
+      "appliesTo": "AllServers",
+      "rebootRequired": false,
+      "applyFunction": "Disable-WDigest",
+      "rollbackFunction": "Enable-WDigest",
+      "testFunction": "Test-WDigestDisabled",
+      "gpo": {
+        "key": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest",
+        "values": [
+          { "valueName": "UseLogonCredential", "type": "DWord", "value": 0 }
+        ]
+      },
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-LSASS-001",
+      "name": "Activer la protection LSASS (RunAsPPL)",
+      "description": "Active la protection LSASS en tant que Protected Process Light (RunAsPPL=1) pour bloquer le dump memoire.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-LSAProtection",
+      "severity": "High",
+      "appliesTo": "AllServers",
+      "rebootRequired": true,
+      "applyFunction": "Enable-LSASSProtection",
+      "rollbackFunction": "Disable-LSASSProtection",
+      "testFunction": "Test-LSASSProtection",
+      "gpo": {
+        "key": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa",
+        "values": [
+          { "valueName": "RunAsPPL", "type": "DWord", "value": 1 }
+        ]
+      },
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-LMHASH-001",
+      "name": "Interdire le stockage des hash LM",
+      "description": "Active NoLMHash=1 pour empecher le stockage des hash LM (faibles) lors des changements de mot de passe.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-LMHashAuthorized",
+      "severity": "Medium",
+      "appliesTo": "DomainController",
+      "rebootRequired": false,
+      "applyFunction": "Disable-LMHashStorage",
+      "rollbackFunction": "Enable-LMHashStorage",
+      "testFunction": "Test-LMHashStorage",
+      "gpo": {
+        "key": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa",
+        "values": [
+          { "valueName": "NoLMHash", "type": "DWord", "value": 1 }
+        ]
+      },
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-ANON-001",
+      "name": "Restreindre l'enumeration anonyme (SAM/RestrictAnonymous)",
+      "description": "Active RestrictAnonymous=1 et RestrictAnonymousSAM=1 pour bloquer l'enumeration anonyme des comptes et partages.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-NullSession",
+      "severity": "Medium",
+      "appliesTo": "DomainController",
+      "rebootRequired": false,
+      "applyFunction": "Disable-AnonymousEnumeration",
+      "rollbackFunction": "Enable-AnonymousEnumeration",
+      "testFunction": "Test-AnonymousEnumeration",
+      "gpo": {
+        "key": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa",
+        "values": [
+          { "valueName": "RestrictAnonymous", "type": "DWord", "value": 1 },
+          { "valueName": "RestrictAnonymousSAM", "type": "DWord", "value": 1 }
+        ]
+      },
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-NTLM-001",
+      "name": "Restreindre NTLM (audit puis blocage)",
+      "description": "Renforce la politique NTLM. Par defaut applique le niveau AUDIT (=1) pour eviter de casser le legacy avant blocage.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-NTLMv1",
+      "severity": "Medium",
+      "appliesTo": "DomainController",
+      "rebootRequired": false,
+      "applyFunction": "Set-NTLMRestriction",
+      "rollbackFunction": "Reset-NTLMRestriction",
+      "testFunction": "Test-NTLMRestriction",
+      "gpo": {
+        "key": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\MSV1_0",
+        "values": [
+          { "valueName": "RestrictSendingNTLMTraffic", "type": "DWord", "value": 1 }
+        ]
+      },
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-MAQ-001",
+      "name": "Mettre ms-DS-MachineAccountQuota a 0",
+      "description": "Empeche les utilisateurs standards de joindre des machines au domaine (mitigation noPac/sAMAccountName spoofing).",
+      "category": "PrivilegedAccounts",
+      "pingCastleRule": "S-ADRegistration",
+      "severity": "Medium",
+      "appliesTo": "Domain",
+      "rebootRequired": false,
+      "applyFunction": "Set-MachineAccountQuotaZero",
+      "rollbackFunction": "Reset-MachineAccountQuota",
+      "testFunction": "Test-MachineAccountQuota",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-KRB-001",
+      "name": "Auditer les delegations non contraintes",
+      "description": "Detecte les comptes/ordinateurs en delegation Kerberos non contrainte (hors DC) et marque les comptes sensibles 'Account is sensitive and cannot be delegated'. Mesure d'AUDIT par defaut (revue manuelle).",
+      "category": "PrivilegedAccounts",
+      "pingCastleRule": "P-Delegated",
+      "severity": "High",
+      "appliesTo": "Domain",
+      "rebootRequired": false,
+      "applyFunction": "Protect-Delegation",
+      "rollbackFunction": "Unprotect-Delegation",
+      "testFunction": "Test-Delegation",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-PWD-001",
+      "name": "Politique de rotation des mots de passe machine",
+      "description": "Verifie/applique DisablePasswordChange=0 et MaximumPasswordAge=30 sur les comptes machine.",
+      "category": "StaleObjects",
+      "pingCastleRule": "S-PwdNeverExpires",
+      "severity": "Low",
+      "appliesTo": "AllServers",
+      "rebootRequired": false,
+      "applyFunction": "Set-MachinePasswordPolicy",
+      "rollbackFunction": "Reset-MachinePasswordPolicy",
+      "testFunction": "Test-MachinePasswordPolicy",
+      "gpo": {
+        "key": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters",
+        "values": [
+          { "valueName": "DisablePasswordChange", "type": "DWord", "value": 0 },
+          { "valueName": "MaximumPasswordAge", "type": "DWord", "value": 30 }
+        ]
+      },
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-WEBCLIENT-001",
+      "name": "Desactiver le service WebClient sur les DC",
+      "description": "Desactive le service WebClient (WebDAV) sur les controleurs de domaine : vecteur de relais d'authentification (coercition type PetitPotam vers HTTP).",
+      "category": "Anomalies",
+      "pingCastleRule": "A-DC-WebClient",
+      "severity": "Medium",
+      "appliesTo": "DomainController",
+      "rebootRequired": false,
+      "applyFunction": "Disable-WebClientService",
+      "rollbackFunction": "Enable-WebClientService",
+      "testFunction": "Test-WebClientDisabled",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-RECYCLEBIN-001",
+      "name": "Activer la Corbeille Active Directory",
+      "description": "Active la fonctionnalite optionnelle 'Recycle Bin' de la foret pour permettre la recuperation d'objets supprimes. ATTENTION : irreversible (ne peut pas etre desactivee).",
+      "category": "Anomalies",
+      "pingCastleRule": "P-RecycleBin",
+      "severity": "Medium",
+      "appliesTo": "Forest",
+      "rebootRequired": false,
+      "applyFunction": "Enable-ADRecycleBinFeature",
+      "rollbackFunction": "Disable-ADRecycleBinFeature",
+      "testFunction": "Test-ADRecycleBin",
+      "reversible": false,
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-PWDLEN-001",
+      "name": "Longueur minimale de mot de passe du domaine (>= 12)",
+      "description": "Porte la longueur minimale de mot de passe de la strategie de domaine par defaut a 12 caracteres (recommandation entreprise). Valeur d'origine sauvegardee dans state_backup.json.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-MinPwdLen",
+      "severity": "Medium",
+      "appliesTo": "Domain",
+      "rebootRequired": false,
+      "applyFunction": "Set-DomainMinPasswordLength",
+      "rollbackFunction": "Reset-DomainMinPasswordLength",
+      "testFunction": "Test-DomainMinPasswordLength",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-DSHEUR-001",
+      "name": "Interdire les operations LDAP anonymes (dsHeuristics)",
+      "description": "Force le 7e caractere de dsHeuristics a '0' pour bloquer les operations LDAP anonymes (bind/recherche) sur l'annuaire.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-DsHeuristicsAnonymous",
+      "severity": "Medium",
+      "appliesTo": "Forest",
+      "rebootRequired": false,
+      "applyFunction": "Disable-AnonymousLDAP",
+      "rollbackFunction": "Enable-AnonymousLDAP",
+      "testFunction": "Test-AnonymousLDAPDisabled",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-PREWIN2000-001",
+      "name": "Nettoyer 'Pre-Windows 2000 Compatible Access'",
+      "description": "Retire 'Anonymous Logon' (S-1-5-7) et 'Everyone' (S-1-1-0) du groupe 'Pre-Windows 2000 Compatible Access', source d'enumeration anonyme. A valider si des services legacy (RRAS/NPS) en dependent.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-PreWin2000Anonymous",
+      "severity": "Medium",
+      "appliesTo": "Domain",
+      "rebootRequired": false,
+      "applyFunction": "Remove-PreWin2000Anonymous",
+      "rollbackFunction": "Add-PreWin2000Anonymous",
+      "testFunction": "Test-PreWin2000Anonymous",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-REVERSIBLE-001",
+      "name": "Desactiver le chiffrement reversible des mots de passe",
+      "description": "Desactive 'Stocker les mots de passe en utilisant un chiffrement reversible' dans la strategie de domaine par defaut (equivalent stockage quasi-clair).",
+      "category": "Anomalies",
+      "pingCastleRule": "S-Reversible",
+      "severity": "High",
+      "appliesTo": "Domain",
+      "rebootRequired": false,
+      "applyFunction": "Disable-ReversibleEncryption",
+      "rollbackFunction": "Enable-ReversibleEncryption",
+      "testFunction": "Test-ReversibleEncryption",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-LMAUTH-001",
+      "name": "Forcer NTLMv2 (LmCompatibilityLevel=5)",
+      "description": "Force l'envoi de NTLMv2 uniquement et refuse LM/NTLMv1 (LmCompatibilityLevel=5). A valider avec d'eventuels clients/appliances tres anciens.",
+      "category": "Anomalies",
+      "pingCastleRule": "S-OldNtlm",
+      "severity": "Medium",
+      "appliesTo": "DomainController",
+      "rebootRequired": false,
+      "applyFunction": "Set-LmCompatibilityLevel",
+      "rollbackFunction": "Reset-LmCompatibilityLevel",
+      "testFunction": "Test-LmCompatibilityLevel",
+      "gpo": {
+        "key": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa",
+        "values": [
+          { "valueName": "LmCompatibilityLevel", "type": "DWord", "value": 5 }
+        ]
+      },
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-PREAUTH-001",
+      "name": "Reactiver la pre-authentification Kerberos (anti AS-REP roasting)",
+      "description": "Retire le flag DONT_REQ_PREAUTH des comptes actifs (hors krbtgt/Guest). Remediation automatique : chaque compte modifie est trace dans state_backup.json pour rollback.",
+      "category": "PrivilegedAccounts",
+      "pingCastleRule": "S-NoPreAuth",
+      "severity": "High",
+      "appliesTo": "Domain",
+      "rebootRequired": false,
+      "applyFunction": "Repair-KerberosPreAuth",
+      "rollbackFunction": "Undo-KerberosPreAuth",
+      "testFunction": "Test-KerberosPreAuth",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-DES-001",
+      "name": "Auditer les comptes en chiffrement DES",
+      "description": "AUDIT seul (aucune modification) : liste les comptes avec UseDESKeyOnly. Le passage en RC4/AES doit etre valide manuellement (un service legacy DES-only pourrait casser).",
+      "category": "Anomalies",
+      "pingCastleRule": "S-DesEnabled",
+      "severity": "Medium",
+      "appliesTo": "Domain",
+      "rebootRequired": false,
+      "applyFunction": "Show-DesAccounts",
+      "rollbackFunction": "Undo-DesAudit",
+      "testFunction": "Test-DesAccounts",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-PSLOG-001",
+      "name": "Activer la journalisation PowerShell (ScriptBlock + Module)",
+      "description": "Active EnableScriptBlockLogging et EnableModuleLogging (tous modules) pour tracer l'execution PowerShell (detection d'attaques). En mode GPO, deploye dans la GPO 'BlueLock - Audit & Logging' liee a la RACINE du domaine -> s'applique a TOUS les serveurs.",
+      "category": "Anomalies",
+      "pingCastleRule": "",
+      "severity": "Medium",
+      "appliesTo": "AllServers",
+      "rebootRequired": false,
+      "applyFunction": "Enable-PowerShellLogging",
+      "rollbackFunction": "Disable-PowerShellLogging",
+      "testFunction": "Test-PowerShellLogging",
+      "gpo": {
+        "gpoName": "BlueLock - Audit & Logging",
+        "target": "@DomainRoot",
+        "values": [
+          { "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging", "valueName": "EnableScriptBlockLogging", "type": "DWord", "value": 1 },
+          { "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging", "valueName": "EnableModuleLogging", "type": "DWord", "value": 1 },
+          { "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging\\ModuleNames", "valueName": "*", "type": "String", "value": "*" }
+        ]
+      },
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-AUDIT-001",
+      "name": "Activer la strategie d'audit avancee (logs de securite)",
+      "description": "Active Success+Failure sur les sous-categories cles (validation d'identifiants, Kerberos, logon, acces/modif annuaire, gestion comptes/groupes, creation de processus, changement de strategie d'audit) + SCENoApplyLegacyAuditPolicy=1. En mode GPO, deploye via audit.csv dans SYSVOL (GPO 'BlueLock - Audit & Logging' liee a la RACINE du domaine) -> tous les serveurs. En mode local, auditpol /backup pour un rollback exact.",
+      "category": "Anomalies",
+      "pingCastleRule": "",
+      "severity": "Medium",
+      "appliesTo": "AllServers",
+      "rebootRequired": false,
+      "applyFunction": "Enable-AdvancedAuditPolicy",
+      "rollbackFunction": "Reset-AdvancedAuditPolicy",
+      "testFunction": "Test-AdvancedAuditPolicy",
+      "gpo": {
+        "gpoName": "BlueLock - Audit & Logging",
+        "target": "@DomainRoot",
+        "values": [
+          { "key": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "valueName": "SCENoApplyLegacyAuditPolicy", "type": "DWord", "value": 1 }
+        ],
+        "auditCsv": [
+          { "guid": "{0CCE923F-69AE-11D9-BED3-505054503030}", "name": "Credential Validation",              "value": 3 },
+          { "guid": "{0CCE9242-69AE-11D9-BED3-505054503030}", "name": "Kerberos Authentication Service",    "value": 3 },
+          { "guid": "{0CCE9240-69AE-11D9-BED3-505054503030}", "name": "Kerberos Service Ticket Operations", "value": 3 },
+          { "guid": "{0CCE9215-69AE-11D9-BED3-505054503030}", "name": "Logon",                              "value": 3 },
+          { "guid": "{0CCE9216-69AE-11D9-BED3-505054503030}", "name": "Logoff",                             "value": 1 },
+          { "guid": "{0CCE921B-69AE-11D9-BED3-505054503030}", "name": "Special Logon",                      "value": 3 },
+          { "guid": "{0CCE923B-69AE-11D9-BED3-505054503030}", "name": "Directory Service Access",           "value": 3 },
+          { "guid": "{0CCE923C-69AE-11D9-BED3-505054503030}", "name": "Directory Service Changes",          "value": 3 },
+          { "guid": "{0CCE9235-69AE-11D9-BED3-505054503030}", "name": "User Account Management",            "value": 3 },
+          { "guid": "{0CCE9237-69AE-11D9-BED3-505054503030}", "name": "Security Group Management",          "value": 3 },
+          { "guid": "{0CCE9236-69AE-11D9-BED3-505054503030}", "name": "Computer Account Management",        "value": 3 },
+          { "guid": "{0CCE922B-69AE-11D9-BED3-505054503030}", "name": "Process Creation",                   "value": 3 },
+          { "guid": "{0CCE922F-69AE-11D9-BED3-505054503030}", "name": "Audit Policy Change",                "value": 3 },
+          { "guid": "{0CCE9228-69AE-11D9-BED3-505054503030}", "name": "Sensitive Privilege Use",            "value": 3 }
+        ]
+      },
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-PWDCOMPLEX-001",
+      "name": "Activer la complexite de mot de passe du domaine",
+      "description": "Active ComplexityEnabled sur la politique de mot de passe par defaut du domaine (majuscules + minuscules + chiffres + caracteres speciaux, et nom d'utilisateur non contenu). Etat anterieur conserve dans state_backup.json pour rollback.",
+      "category": "Anomalies",
+      "pingCastleRule": "A-PwdComplexity",
+      "severity": "Medium",
+      "appliesTo": "Domain",
+      "rebootRequired": false,
+      "applyFunction": "Enable-PasswordComplexity",
+      "rollbackFunction": "Disable-PasswordComplexity",
+      "testFunction": "Test-PasswordComplexity",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-PROTECTED-001",
+      "name": "Ajouter les comptes privilegies au groupe Protected Users",
+      "description": "Ajoute au groupe 'Protected Users' les comptes adminCount=1 QUI SONT reellement membres (recursif) d'un groupe privilegie (ecarte les flags adminCount orphelins ; exclut krbtgt/Guest). ATTENTION impact : Protected Users desactive NTLM/DES/RC4, la delegation et limite le TGT a 4h pour ses membres - valider qu'aucun compte de service legacy n'en depend. Comptes ajoutes traces dans state_backup.json pour rollback.",
+      "category": "PrivilegedAccounts",
+      "pingCastleRule": "P-ProtectedUsers",
+      "severity": "High",
+      "appliesTo": "Domain",
+      "rebootRequired": false,
+      "applyFunction": "Add-PrivilegedToProtectedUsers",
+      "rollbackFunction": "Remove-PrivilegedFromProtectedUsers",
+      "testFunction": "Test-ProtectedUsers",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-PWDAUDIT-001",
+      "name": "Auditer la politique et les mots de passe faibles du domaine",
+      "description": "AUDIT seul. Comptes : PASSWD_NOTREQD et mot de passe sans expiration. Politique par defaut : longueur < 12, complexite OFF, historique < 24, MaxAge hors 1-365 j, MinAge < 1 j, verrouillage desactive. FGPP : memes verifs sur chaque PSO. Pointe vers DSInternals (Test-PasswordQuality) pour l'audit des hash.",
+      "category": "Anomalies",
+      "pingCastleRule": "P-PwdNotRequired",
+      "severity": "Medium",
+      "appliesTo": "Domain",
+      "rebootRequired": false,
+      "applyFunction": "Show-WeakPasswordAccounts",
+      "rollbackFunction": "Undo-WeakPasswordAudit",
+      "testFunction": "Test-WeakPasswordAccounts",
+      "canBeSkipped": true
+    },
+    {
+      "id": "HAD-HONEYPOT-001",
+      "name": "Deployer un compte honeypot (leurre de detection)",
+      "description": "Cree un compte de service leurre (SVC-BackupLegacy) avec un SPN (appat Kerberoasting), un mot de passe aleatoire de 64 caracteres jamais utilise, et une SACL d'audit. Toute tentative d'authentification/de TGS sur ce compte est un signal d'attaque. NECESSITE une alerte SIEM sur les evenements 4769/4768 pour ce compte (sinon valeur limitee).",
+      "category": "Anomalies",
+      "pingCastleRule": "",
+      "severity": "Medium",
+      "appliesTo": "Domain",
+      "rebootRequired": false,
+      "applyFunction": "New-ADHoneypot",
+      "rollbackFunction": "Remove-ADHoneypot",
+      "testFunction": "Test-ADHoneypot",
+      "canBeSkipped": true
+    }
+  ]
+}

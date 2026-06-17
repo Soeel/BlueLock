@@ -1,0 +1,11 @@
+NomServeur;NiveauTiering;RoleServeur;OUCible;GroupeAdminAutorise
+SRV-DC01;T0;Controleur domaine;OU=T0,OU=Servers,DC=AUTO,DC=LOCAL;GG_T0_Admins
+SRV-DC02;T0;Controleur domaine;OU=T0,OU=Servers,DC=AUTO,DC=LOCAL;GG_T0_Admins
+SRV-BASTION;T0;Bastion critique;OU=T0,OU=Servers,DC=AUTO,DC=LOCAL;GG_T0_Admins
+SRV-REBOND;T1;Serveur rebond;OU=T1,OU=Servers,DC=AUTO,DC=LOCAL;GG_T1_Admins
+SRV-FILESAPP;T1;Serveur fichiers applicatif;OU=T1,OU=Servers,DC=AUTO,DC=LOCAL;GG_T1_Admins
+SRV-WEB;T1;Serveur web;OU=T1,OU=Servers,DC=AUTO,DC=LOCAL;GG_T1_Admins
+SRV-SIEM;T1;Serveur SIEM;OU=T1,OU=Servers,DC=AUTO,DC=LOCAL;GG_T1_Admins
+SRV-SCADABR;T1;Serveur industriel applicatif;OU=T1,OU=Servers,DC=AUTO,DC=LOCAL;GG_T1_Admins
+POSTE-001;T2;Poste utilisateur;OU=T2,OU=Servers,DC=AUTO,DC=LOCAL;GG_T2_Admins
+POSTE-002;T2;Poste utilisateur;OU=T2,OU=Servers,DC=AUTO,DC=LOCAL;GG_T2_Admins
