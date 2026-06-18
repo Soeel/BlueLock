@@ -1,0 +1,8 @@
+# Sorties de run (contiennent des mots de passe initiaux en clair)
+Outputs/
+Logs/
+# Backups CSV generes par -UpdateInputCsv
+*.bak_*
+*.bak
+# Anciens exports
+exports/

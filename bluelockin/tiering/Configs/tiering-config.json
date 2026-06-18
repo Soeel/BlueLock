@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "schemaVersion": "1.0",
+    "description": "Modele de donnees du Tiering AD (T0/T1/T2). Consomme par les fonctions du moteur. Inspire de l'architecture config-driven de la partie ad-hardening.",
+    "author": "BlueLock - tiering"
+  },
+  "tiers": [ "T0", "T1", "T2", "Legacy" ],
+  "naming": {
+    "adminRootOu": "Admins",
+    "groupRootOu": "Groups",
+    "serverRootOu": "Servers",
+    "tierAdminGroupPrefix": "GG_",
+    "tierAdminGroupSuffix": "_Admins",
+    "serverLocalAdminPrefix": "GLA_",
+    "serverLocalAdminSuffix": "_Administrators",
+    "adminAccountPrefix": "adm"
+  },
+  "protectOusFromDeletion": true,
+  "adminPasswordLength": 20,
+  "markSensitiveTier0": true,
+  "tier0PrivilegedGroups": [ "Domain Admins" ],
+  "passwordPolicy": {
+    "name": "PSO_Admin_Tiering",
+    "precedence": 10,
+    "minLength": 14,
+    "historyCount": 24,
+    "maxAgeDays": 180,
+    "minAgeDays": 1,
+    "lockoutThreshold": 5,
+    "lockoutDurationMin": 15,
+    "lockoutWindowMin": 15
+  },
+  "denyLogon": {
+    "T0":     { "denyTiers": [ "T1", "T2", "Legacy" ], "denyDomainUsers": true },
+    "T1":     { "denyTiers": [ "T0", "T2", "Legacy" ], "denyDomainUsers": true },
+    "T2":     { "denyTiers": [ "T0", "T1", "Legacy" ], "denyDomainUsers": false },
+    "Legacy": { "denyTiers": [ "T0", "T1", "T2" ],     "denyDomainUsers": true }
+  }
+}

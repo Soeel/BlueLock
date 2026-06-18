@@ -1,0 +1,10 @@
+NomServeur;NiveauTiering;RoleServeur;OUCible;GroupeAdminAutorise
+SRV-DC01;T0;Controleur de domaine + DNS/DHCP;OU=T0,OU=Servers,DC=AUTO,DC=LOCAL;GG_T0_Admins
+SRV-BASTION;T0;Bastion d'administration (Guacamole);OU=T0,OU=Servers,DC=AUTO,DC=LOCAL;GG_T0_Admins
+SRV-FILESAPP;T1;Serveur de fichiers + application MES/ERP;OU=T1,OU=Servers,DC=AUTO,DC=LOCAL;GG_T1_Admins
+SRV-WEB;T1;Portail wiki interne;OU=T1,OU=Servers,DC=AUTO,DC=LOCAL;GG_T1_Admins
+SRV-SIEM;T1;Plateforme SIEM (ELK);OU=T1,OU=Servers,DC=AUTO,DC=LOCAL;GG_T1_Admins
+SRV-SCADABR;T1;SCADA / supervision industrielle;OU=T1,OU=Servers,DC=AUTO,DC=LOCAL;GG_T1_Admins
+SRV-HMI-LEGACY;Legacy;Station HMI/ingenierie obsolete (Windows non supporte);OU=Legacy,OU=Servers,DC=AUTO,DC=LOCAL;GG_Legacy_Admins
+POSTE-001;T2;Poste de travail utilisateur;OU=T2,OU=Servers,DC=AUTO,DC=LOCAL;GG_T2_Admins
+POSTE-002;T2;Poste de travail utilisateur;OU=T2,OU=Servers,DC=AUTO,DC=LOCAL;GG_T2_Admins

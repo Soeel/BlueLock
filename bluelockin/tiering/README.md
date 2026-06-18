@@ -1,60 +1,109 @@
-# Package Tiering AD auto domaine + GPO
+# Tiering AD - BlueLock
 
-## Objectif
-Ce package implemente un modele Tiering AD simple a partir des CSV.
-Le script detecte automatiquement le domaine AD via `Get-ADDomain`.
+Implémentation automatisée du modèle **Tier 0 / Tier 1 / Tier 2** sur Active Directory,
+dans la même architecture **config-driven** que la partie `ad-hardening` (catalogue JSON
+de phases, moteur `test → apply → verify`, rollback, logging structuré, rapports).
 
-## Fichiers
-- `Implement-TieringModelAD.ps1` : script principal
-- `Comptes_Admin_Tiering.csv` : comptes admin a creer
-- `Serveurs_Tiering.csv` : serveurs a classer par tier
-- `Tableau_Tiering_AD_Auto_GPO.xlsx` : version Excel lisible du modele
+## Principe
 
-## Nomenclature des comptes admin
-Les comptes sont au format :
-- `admt0...` pour les comptes T0
-- `admt1...` pour les comptes T1
-- `admt2...` pour les comptes T2
+Le tiering sépare les niveaux de privilège pour bloquer le **mouvement latéral** : un compte
+d'un tier ne doit jamais exposer ses identifiants sur une machine d'un autre tier. Ce socle
+crée la structure (OU/groupes/comptes) **et** applique le cloisonnement réel via GPO.
 
-Exemple : `admt0hdubois`, `admt1lmartin`, `admt2nrobert`.
+| Tier | Périmètre | Exemples |
+|---|---|---|
+| **T0** | Plan de contrôle de l'identité | DC, AD, bastion d'administration |
+| **T1** | Serveurs métiers / production | fichiers, applicatif MES/ERP, SIEM, SCADA, web |
+| **T2** | Postes et utilisateurs | postes de travail |
+| **Legacy** | Systèmes obsolètes **isolés** (exemptés) | HMI/stations d'ingénierie sur OS non supporté |
 
-## Commandes
-Test sans modification :
-```powershell
-.\Implement-TieringModelAD.ps1 -WhatIf
+## Arborescence
+
+```
+tiering/
+├── Invoke-TieringModel.ps1     # Orchestrateur
+├── Configs/
+│   ├── tiering-config.json     # Modèle (tiers, nommage, PSO, matrice deny-logon)
+│   ├── tiering-tasks.json      # Catalogue ORDONNÉ des phases
+│   ├── admin-accounts.csv      # Comptes admin à créer
+│   └── servers.csv             # Serveurs à classer par tier
+├── Modules/
+│   ├── TIER.Common.psm1        # Logging, prérequis, contexte, helpers (noms, mdp)
+│   ├── TIER.Model.psm1         # Moteur + phases AD (OU, groupes, comptes, PSO, serveurs)
+│   ├── TIER.Gpo.psm1           # GPO : admin local (Restricted Groups) + deny-logon
+│   └── TIER.Reporting.psm1     # Rapport HTML + exports JSON/CSV
+├── Logs/                       # Transcripts + log structuré
+└── Outputs/<timestamp>/        # report.html, tiering_run.json, access_matrix.csv, admin_passwords.csv
 ```
 
-Mettre a jour les CSV avec le vrai domaine detecte :
+## Phases (catalogue `tiering-tasks.json`)
+
+| ID | Phase | Réversible |
+|---|---|---|
+| TIER-OU-001 | Crée les OU `Admins`/`Servers`/`Groups` + sous-OU T0/T1/T2 | non |
+| TIER-GRP-001 | Crée les groupes `GG_T0/T1/T2_Admins` | non |
+| TIER-ACC-001 | Crée les comptes `admtX...` (T0 marqués *non délégables*) | non (rollback = désactive) |
+| TIER-T0DOMAIN-001 | Imbrique `GG_T0_Admins` dans les groupes privilégiés du domaine (par défaut *Domain Admins*) | oui |
+| TIER-PROTECTED-001 | Ajoute les comptes T0 au groupe **Protected Users** (anti vol d'identifiants) | oui |
+| TIER-PSO-001 | PSO admin (14 car., 180 j, historique 24, lockout) | oui |
+| TIER-SRVGRP-001 | Groupes d'accès local par serveur (`GLA_<serveur>_Administrators`) | non |
+| TIER-MOVE-001 | Déplace les serveurs dans les OU de tier | non |
+| TIER-LOCALADMIN-001 | GPO **Restricted Groups** : `GG_TX_Admins` admin local des serveurs du tier | oui |
+| TIER-DENYLOGON-001 | GPO **deny-logon cross-tier** (cœur du cloisonnement) | oui |
+
+### Deny-logon (TIER-DENYLOGON-001)
+
+Une GPO par tier interdit l'ouverture de session (locale, RDP, batch, service, réseau) aux
+groupes admin des **autres** tiers, et aux utilisateurs du domaine sur T0/T1. C'est ce qui
+empêche réellement un compte T0 d'exposer ses identifiants sur un poste T2 (vol mimikatz),
+et inversement. Implémenté via `GptTmpl.inf` (User Rights Assignment) écrit en SYSVOL, avec
+enregistrement du CSE Security — pas de script de démarrage. Matrice pilotée par
+`tiering-config.json → denyLogon`.
+
+## Utilisation
+
 ```powershell
-.\Implement-TieringModelAD.ps1 -UpdateInputCsv
+# Simulation (aucune modification)
+.\Invoke-TieringModel.ps1 -DryRun
+
+# Aligner les CSV sur le domaine réel détecté + nomenclature admtX (crée des .bak)
+.\Invoke-TieringModel.ps1 -UpdateInputCsv
+
+# Déploiement complet
+.\Invoke-TieringModel.ps1
+
+# Sans déplacer les objets ordinateurs
+.\Invoke-TieringModel.ps1 -SkipServerMove
+
+# Rollback (supprime les GPO + PSO ; OU/groupes/comptes conservés)
+.\Invoke-TieringModel.ps1 -Rollback
 ```
 
-Execution complete avec deplacement serveurs et droits via GPO :
-```powershell
-.\Implement-TieringModelAD.ps1 -UpdateInputCsv -MoveServersToOUs -ConfigureGpoLocalAdminRights
-```
+| Paramètre | Effet |
+|---|---|
+| `-DryRun` | Simulation |
+| `-Rollback` | Annule les phases réversibles (GPO + PSO) |
+| `-UpdateInputCsv` | Réécrit les CSV avec le domaine détecté |
+| `-SkipServerMove` | Ne déplace pas les serveurs |
 
-## Droits via GPO
-Le script cree une GPO par tier :
-- `GPO_Tiering_T0_Local_Admins`
-- `GPO_Tiering_T1_Local_Admins`
-- `GPO_Tiering_T2_Local_Admins`
+## ⚠️ Points d'attention
 
-Chaque GPO est liee a l'OU serveur correspondante :
-- `OU=T0,OU=Servers,...`
-- `OU=T1,OU=Servers,...`
-- `OU=T2,OU=Servers,...`
-
-La GPO ajoute le groupe AD du tier dans le groupe Administrators local du serveur via un script de demarrage ordinateur.
-Le script utilise le SID local `S-1-5-32-544`, donc il fonctionne sur Windows FR et EN.
-
-## Exports generes
-- `exports\MotsDePasse_Comptes_Admin.csv`
-- `exports\Matrice_Acces_Serveurs.csv`
-- `exports\Domaine_Detecte.csv`
-
-## Notes importantes
-- Aucun mot de passe n'est envoye par mail.
-- Les mots de passe generes contiennent uniquement des lettres et chiffres.
-- Les serveurs doivent exister dans AD pour etre deplaces.
-- Lance le script avec un compte ayant les droits de creation OU, groupes, comptes, GPO et deplacement d'objets ordinateurs.
+- **Admin local** : approche `Restricted Groups __Memberof` (additive, réappliquée). Combinée
+  au deny-logon, un admin local résiduel d'un autre tier ne peut de toute façon plus se connecter.
+- **Domain Admins** : la phase `TIER-T0DOMAIN-001` ajoute `GG_T0_Admins` comme membre des
+  groupes listés dans `tiering-config.json → tier0PrivilegedGroups` (par défaut `Domain Admins`).
+  Les comptes `admt0X` deviennent ainsi *administrateurs du domaine* par héritage. Ajouter
+  `Enterprise Admins` / `Schema Admins` à la liste si nécessaire (forest root uniquement).
+  La phase **ne nettoie pas** les autres membres existants — à faire manuellement après revue.
+- **Mots de passe** : `Outputs/<timestamp>/admin_passwords.csv` contient les mots de passe
+  initiaux en clair → **à protéger / supprimer après remise**. Le dossier `Outputs/` et les
+  `.bak` sont exclus du Git (`.gitignore`).
+- **Protected Users (`TIER-PROTECTED-001`)** : protège les comptes T0 (interdit NTLM/DES/RC4,
+  la délégation, le cache d'identifiants, TGT limité à 4 h). Requiert un **niveau fonctionnel
+  de domaine ≥ 2012 R2**. Vérifier qu'aucun compte T0 ne dépend de NTLM avant d'activer.
+- **Tier Legacy** : tier d'**isolation** pour les systèmes obsolètes (HMI, stations
+  d'ingénierie sur OS non supporté, fréquents en milieu industriel). Sa GPO deny-logon
+  interdit T0/T1/T2 sur les machines Legacy, et interdit les comptes Legacy partout ailleurs :
+  les systèmes obsolètes sont mis en quarantaine, administrés uniquement par `GG_Legacy_Admins`.
+  Ajouter/retirer ce tier = éditer `tiering-config.json` (`tiers` + `denyLogon`), aucun code.
+- **Bastion** : le tiering est le prérequis de l'intégration bastion (origine des connexions T0).

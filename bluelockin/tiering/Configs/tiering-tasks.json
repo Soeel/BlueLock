@@ -1,0 +1,119 @@
+{
+  "metadata": {
+    "schemaVersion": "1.0",
+    "description": "Catalogue declaratif des phases du Tiering AD. Le moteur execute chaque phase via test -> apply -> verify (meme modele que ad-hardening). Les phases sont ORDONNEES.",
+    "author": "BlueLock - tiering"
+  },
+  "tasks": [
+    {
+      "id": "TIER-OU-001",
+      "name": "Creer les OU de tiering (Admins/Servers/Groups + T0/T1/T2)",
+      "description": "Cree la structure d'OU : OU=Admins, OU=Servers (avec sous-OU T0/T1/T2) et OU=Groups. Protege contre la suppression accidentelle si configure.",
+      "category": "Structure",
+      "applyFunction": "New-TierOUs",
+      "testFunction": "Test-TierOUs",
+      "rollbackFunction": "Remove-TierOUs",
+      "reversible": false,
+      "canBeSkipped": false
+    },
+    {
+      "id": "TIER-GRP-001",
+      "name": "Creer les groupes admin par tier (GG_T0/T1/T2_Admins)",
+      "description": "Cree les groupes de securite globaux qui regroupent les comptes d'administration de chaque tier.",
+      "category": "Groupes",
+      "applyFunction": "New-TierAdminGroups",
+      "testFunction": "Test-TierAdminGroups",
+      "rollbackFunction": "Remove-TierAdminGroups",
+      "reversible": false,
+      "canBeSkipped": false
+    },
+    {
+      "id": "TIER-ACC-001",
+      "name": "Creer les comptes d'administration (admt0/t1/t2)",
+      "description": "Cree les comptes admin depuis le CSV avec nomenclature admtX, mot de passe aleatoire (exporte), ajout au groupe du tier. Les comptes T0 sont marques 'sensibles, non delegables'.",
+      "category": "Comptes",
+      "applyFunction": "New-TierAdminAccounts",
+      "testFunction": "Test-TierAdminAccounts",
+      "rollbackFunction": "Disable-TierAdminAccounts",
+      "reversible": false,
+      "canBeSkipped": false
+    },
+    {
+      "id": "TIER-T0DOMAIN-001",
+      "name": "Imbriquer GG_T0_Admins dans les groupes privilegies du domaine",
+      "description": "Ajoute le groupe GG_T0_Admins comme membre des groupes privilegies listes dans 'tier0PrivilegedGroups' (par defaut : Domain Admins). C'est ce qui rend les comptes admt0X reellement administrateurs du domaine. NE NETTOIE PAS les membres existants de ces groupes (a faire manuellement apres revue). Reversible : retire UNIQUEMENT le nesting de GG_T0_Admins.",
+      "category": "Comptes",
+      "applyFunction": "Add-Tier0ToDomainPrivileged",
+      "testFunction": "Test-Tier0DomainPrivileged",
+      "rollbackFunction": "Remove-Tier0FromDomainPrivileged",
+      "reversible": true,
+      "canBeSkipped": true
+    },
+    {
+      "id": "TIER-PROTECTED-001",
+      "name": "Ajouter les comptes T0 au groupe Protected Users",
+      "description": "Ajoute les comptes membres de GG_T0_Admins au groupe 'Protected Users' (SID de domaine -525). Protege les comptes T0 : interdit NTLM/DES/RC4, la delegation, le cache d'identifiants, et limite le TGT a 4h. NECESSITE un niveau fonctionnel de domaine >= 2012 R2. Reversible : retire les comptes T0 de Protected Users.",
+      "category": "Comptes",
+      "applyFunction": "Add-Tier0ToProtectedUsers",
+      "testFunction": "Test-Tier0ProtectedUsers",
+      "rollbackFunction": "Remove-Tier0FromProtectedUsers",
+      "reversible": true,
+      "canBeSkipped": true
+    },
+    {
+      "id": "TIER-PSO-001",
+      "name": "Appliquer la politique de mot de passe admin (PSO)",
+      "description": "Cree une Fine-Grained Password Policy dediee aux comptes admin (14 car., 180 j, historique 24, lockout) et l'applique aux groupes de tier.",
+      "category": "Comptes",
+      "applyFunction": "Set-TierPasswordPolicy",
+      "testFunction": "Test-TierPasswordPolicy",
+      "rollbackFunction": "Remove-TierPasswordPolicy",
+      "reversible": true,
+      "canBeSkipped": true
+    },
+    {
+      "id": "TIER-SRVGRP-001",
+      "name": "Creer les groupes d'acces serveurs (GLA_<serveur>)",
+      "description": "Pour chaque serveur du CSV, cree un groupe d'admin local dedie (GLA_<serveur>_Administrators) et y ajoute le groupe admin du tier du serveur.",
+      "category": "Groupes",
+      "applyFunction": "New-TierServerAccessGroups",
+      "testFunction": "Test-TierServerAccessGroups",
+      "rollbackFunction": "Remove-TierServerAccessGroups",
+      "reversible": false,
+      "canBeSkipped": true
+    },
+    {
+      "id": "TIER-MOVE-001",
+      "name": "Deplacer les serveurs dans les OU de tier",
+      "description": "Deplace les objets ordinateurs (serveurs presents dans AD) vers OU=T0/T1/T2,OU=Servers selon le CSV. Les serveurs absents sont ignores.",
+      "category": "Structure",
+      "applyFunction": "Move-TierServers",
+      "testFunction": "Test-TierServersPlacement",
+      "rollbackFunction": "Undo-TierServersPlacement",
+      "reversible": false,
+      "canBeSkipped": true
+    },
+    {
+      "id": "TIER-LOCALADMIN-001",
+      "name": "GPO admin local par tier (Restricted Groups)",
+      "description": "Cree/lie une GPO par tier qui rend GG_TX_Admins membre du groupe Administrateurs local des serveurs du tier (Restricted Groups __Memberof, additif et reapplique a chaque rafraichissement - remplace le startup script de l'ancienne version).",
+      "category": "GPO",
+      "applyFunction": "Set-TierLocalAdminGpo",
+      "testFunction": "Test-TierLocalAdminGpo",
+      "rollbackFunction": "Remove-TierLocalAdminGpo",
+      "reversible": true,
+      "canBeSkipped": true
+    },
+    {
+      "id": "TIER-DENYLOGON-001",
+      "name": "GPO deny-logon cross-tier (cloisonnement)",
+      "description": "Cree/lie une GPO par tier qui INTERDIT l'ouverture de session (locale, RDP, batch, service, reseau) aux groupes admin des AUTRES tiers (et aux utilisateurs du domaine sur T0/T1). C'est le coeur du tiering : empeche un compte d'un tier d'exposer ses identifiants sur une machine d'un autre tier.",
+      "category": "GPO",
+      "applyFunction": "Set-TierDenyLogonGpo",
+      "testFunction": "Test-TierDenyLogonGpo",
+      "rollbackFunction": "Remove-TierDenyLogonGpo",
+      "reversible": true,
+      "canBeSkipped": true
+    }
+  ]
+}
