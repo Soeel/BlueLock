@@ -1,48 +1,70 @@
 version: '3.8'
 
+# =============================================================================
+# Bastion BlueLock - Apache Guacamole integre au Tiering AD.
+#  - Authentification LDAPS sur l'AD : les admins se connectent avec leur compte
+#    de tier (admt0x/admt1x/admt2x). Cloisonnement par tier gere cote autorisations
+#    (groupe AD = connection group) - voir scripts/sync_bastion_from_tiering.py.
+#  - MFA TOTP pour tous.
+#  - Secrets fournis par .env (jamais committe ; modele : .env.example).
+# =============================================================================
+
 services:
-  # 1. Le moteur de protocole (RDP, SSH, VNC)
+  # 1. Moteur de protocole (RDP, SSH, VNC)
   guacd:
     image: guacamole/guacd
     container_name: guacd
     restart: always
-    networks:
-      - bastion-net
+    networks: [ bastion-net ]
 
-  # 2. La base de données PostgreSQL
+  # 2. Base de donnees PostgreSQL
   guacamole-db:
     image: postgres:15
     container_name: guacamole-db
     environment:
-      POSTGRES_DB: "guacamole_db"
-      POSTGRES_USER: "guac_user"
-      POSTGRES_PASSWORD: "SafePassword123"
+      POSTGRES_DB: "${POSTGRES_DB}"
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     volumes:
-      - ./init:/docker-entrypoint-initdb.d
+      - ./init:/docker-entrypoint-initdb.d:ro
       - guac-db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U guac_user -d guacamole_db"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: always
-    networks:
-      - bastion-net
+    networks: [ bastion-net ]
 
-  # 3. L'interface Web du Bastion (Apache Guacamole)
+  # 3. Interface Web (Apache Guacamole) - auth hybride LDAP + base, + TOTP
   guacamole:
     image: guacamole/guacamole
     container_name: guacamole
     environment:
-      # Connexion Base de données (Correction de la syntaxe des variables pour l'image Guacamole officielle)
+      # Base de donnees
       POSTGRESQL_HOSTNAME: guacamole-db
-      POSTGRESQL_DATABASE: "guacamole_db"
-      POSTGRESQL_USER: "guac_user"
-      POSTGRESQL_PASSWORD: "SafePassword123"
-      
-      # Connexion au moteur guacd
+      POSTGRESQL_DATABASE: "${POSTGRES_DB}"
+      POSTGRESQL_USER: "${POSTGRES_USER}"
+      POSTGRESQL_PASSWORD: "${POSTGRES_PASSWORD}"
+      # Moteur guacd
       GUACD_HOSTNAME: guacd
-      
+      # --- Authentification LDAPS (Active Directory) ---
+      LDAP_HOSTNAME: "${LDAP_HOSTNAME}"
+      LDAP_PORT: "${LDAP_PORT}"
+      LDAP_ENCRYPTION_METHOD: "${LDAP_ENCRYPTION_METHOD}"
+      LDAP_USER_BASE_DN: "${LDAP_USER_BASE_DN}"
+      LDAP_GROUP_BASE_DN: "${LDAP_GROUP_BASE_DN}"
+      LDAP_USERNAME_ATTRIBUTE: "${LDAP_USERNAME_ATTRIBUTE}"
+      LDAP_USER_SEARCH_FILTER: "${LDAP_USER_SEARCH_FILTER}"
+      LDAP_SEARCH_BIND_DN: "${LDAP_SEARCH_BIND_DN}"
+      LDAP_SEARCH_BIND_PASSWORD: "${LDAP_SEARCH_BIND_PASSWORD}"
+      # --- MFA TOTP (pour tous) ---
+      TOTP_ENABLED: "${TOTP_ENABLED}"
+      # CA de l'AD pour valider le certificat LDAPS (montee ci-dessous).
+      LDAP_TRUST_STORE: /etc/guacamole/ldap-ca.crt
+    volumes:
+      # CA racine de la PKI (valide le LDAPS du DC). Fournie au deploiement.
+      - ./vault-agent/certs/ldap-ca.crt:/etc/guacamole/ldap-ca.crt:ro
     depends_on:
       guacamole-db:
         condition: service_healthy
@@ -52,10 +74,9 @@ services:
         max-size: "10m"
         max-file: "3"
     restart: always
-    networks:
-      - bastion-net
+    networks: [ bastion-net ]
 
-  # 4. Le Reverse Proxy qui consomme la PKI Globale (Exigence 27)
+  # 4. Reverse proxy TLS (consomme la PKI globale)
   reverse-proxy:
     image: nginx:alpine
     container_name: bastion-proxy
@@ -65,13 +86,10 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./vault-agent/certs:/etc/nginx/certs:ro
-    depends_on:
-      - guacamole
+    depends_on: [ guacamole ]
     restart: always
-    networks:
-      - bastion-net
+    networks: [ bastion-net ]
 
-# --- BLOC MANQUANT ET CORRIGÉ ICI ---
 networks:
   bastion-net:
     driver: bridge

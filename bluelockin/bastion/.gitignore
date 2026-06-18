@@ -1,0 +1,11 @@
+# Secrets (jamais committes - utiliser .env.example comme modele)
+.env
+# Certificats / cles (fournis par la PKI au deploiement)
+vault-agent/certs/*.crt
+vault-agent/certs/*.key
+vault-agent/auth/
+# Terraform (etat + providers + binaires)
+scripts/.terraform/
+scripts/*.tfstate
+scripts/*.tfstate.backup
+scripts/.terraform.lock.hcl

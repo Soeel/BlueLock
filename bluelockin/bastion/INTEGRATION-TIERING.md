@@ -94,7 +94,39 @@ Protocole déduit du rôle/OS (Windows → RDP, Linux → SSH), surchageable par
 4. Hygiène dépôt : `.env(.example)`, `.gitignore`, retrait des artefacts commités.
 5. Documentation d'exploitation (ajout d'une cible/d'un tier) + schéma de flux (DAT).
 
-## 7. Limites connues
+## 7. Mise en œuvre (déploiement)
+
+```bash
+cd bluelockin/bastion
+cp .env.example .env            # renseigner DB, LDAP, svc-guac-ldap, guacadmin
+# Fournir la CA de la PKI pour valider le LDAPS du DC :
+#   vault-agent/certs/ldap-ca.crt   (+ bastion.crt / bastion.key pour nginx)
+docker compose up -d            # monte guacd + postgres + guacamole (LDAP+TOTP) + nginx TLS
+
+# Provisionner les connexions depuis le tiering (idempotent) :
+python3 scripts/sync_bastion_from_tiering.py \
+    --url https://bastion.blue.local --user guacadmin \
+    --servers ../tiering/Configs/servers.csv \
+    --dns-domain blue.local --netbios BLUE
+
+# Prévisualiser sans rien créer :
+python3 scripts/sync_bastion_from_tiering.py --dry-run --servers ../tiering/Configs/servers.csv --url https://x
+```
+
+Premier login d'un admin : `admt1x` + mot de passe AD → enrôlement TOTP (QR code) → il ne voit que le groupe **Tier 1**.
+
+## 8. État d'implémentation
+
+| Élément | État |
+|---|---|
+| Hygiène dépôt (.gitignore, retrait tfstate/.exe/certs, secrets en `.env.example`) | ✅ Fait |
+| `docker-compose.yml` : secrets externalisés + **LDAPS** + **TOTP** | ✅ Fait |
+| `sync_bastion_from_tiering.py` (provisioning API REST, idempotent, dry-run validé) | ✅ Fait |
+| Règles pare-feu « RDP/SSH depuis le bastion uniquement » | ⏳ À faire |
+| Trust store LDAPS (CA du DC) automatisé via vault-agent | ⏳ À faire (cert fourni manuellement pour l'instant) |
+| Export logs Guacamole → SIEM | ⏳ À faire (dépend de la brique SIEM) |
+
+## 9. Limites connues
 
 - L'environnement de build ne dispose pas d'AD/Guacamole : tout sera validé statiquement puis
   testé sur la maquette (DC `blue.local` + conteneur bastion).
